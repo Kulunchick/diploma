@@ -31,11 +31,12 @@ async def jobs_events(
     await websocket.accept()
     try:
         workflow_type = await redis.get(f"workflow_type:{workflow_id}")
-        handle = client.get_workflow_handle(workflow_id)
 
         if workflow_type == "solve":
+            handle = client.get_workflow_handle(workflow_id, result_type=SolveResult)
             await _solve_adapter(websocket, handle, redis, workflow_id)
         else:
+            handle = client.get_workflow_handle(workflow_id, result_type=ExperimentResult)
             await _experiment_adapter(websocket, handle, redis, workflow_id)
     except WebSocketDisconnect:
         pass
@@ -77,7 +78,7 @@ async def _solve_adapter(websocket: WebSocket, handle, redis: Redis, workflow_id
 
     redis_task = asyncio.create_task(forward_redis())
     try:
-        result: SolveResult = await handle.result(result_type=SolveResult)
+        result: SolveResult = await handle.result()
 
         # Cancel Redis reader and drain briefly before sending final events.
         redis_task.cancel()
@@ -114,8 +115,6 @@ async def _experiment_adapter(websocket: WebSocket, handle, redis: Redis, workfl
       {type:"complete", data:{...}}              — spec.aggregate() result
       {type:"error", message}
     """
-    typed_handle = redis  # keep for future run_completed Redis events (step 6+)
-
     await websocket.send_json({"type": "started"})
 
     async def poll_progress() -> None:
@@ -132,7 +131,7 @@ async def _experiment_adapter(websocket: WebSocket, handle, redis: Redis, workfl
 
     progress_task = asyncio.create_task(poll_progress())
     try:
-        result: ExperimentResult = await handle.result(result_type=ExperimentResult)
+        result: ExperimentResult = await handle.result()
 
         progress_task.cancel()
         await asyncio.gather(progress_task, return_exceptions=True)
