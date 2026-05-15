@@ -1,7 +1,10 @@
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import {ValidatedInput} from "@/components/ui/validated-input"
-import {useState, useEffect, useRef} from "react"
+import {useState, useEffect, useMemo, useRef} from "react"
+import {USE_TEMPORAL_API} from "@/config";
+import {useJobStream} from "@/hooks/useJobStream";
+import type {ExperimentData} from "@/api/types";
 import {X} from "lucide-react"
 import {
     Table,
@@ -91,12 +94,35 @@ const Experiment1 = () => {
     const [kmax, setKmax] = useState<number>(100);
 
     const [results, setResults] = useState<AlgorithmResult[]>([]);
+
+    // -------------------------------------------------------------------------
+    // Temporal API path (active when VITE_USE_TEMPORAL_API=true)
+    // -------------------------------------------------------------------------
+    const stream = useJobStream<ExperimentData>({ streamMessages: false });
+
+    const temporalResults = useMemo<AlgorithmResult[]>(() => {
+        if (!stream.result) return [];
+        return Object.entries(stream.result)
+            .map(([key, data]) => ({
+                kmax: Number(key),
+                antValue: data.ant.avg_value,
+                antTime: data.ant.avg_time,
+                probValue: data.prob.avg_value,
+                probTime: data.prob.avg_time,
+                relativeDiff: data.relative_difference,
+            }))
+            .sort((a, b) => a.kmax - b.kmax);
+    }, [stream.result]);
+
+    const displayResults = USE_TEMPORAL_API ? temporalResults : results;
+
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const MAX_RECONNECT_ATTEMPTS = 5;
     const RECONNECT_DELAY = 3000;
 
     useEffect(() => {
+        if (USE_TEMPORAL_API) return;
         let reconnectAttempts = 0;
 
         const connectWebSocket = () => {
@@ -160,22 +186,24 @@ const Experiment1 = () => {
     }, []);
 
     const handleSolve = () => {
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            const dataToSend = {
-                count: parameters.count,
-                n: parameters.n,
-                m: parameters.m,
-                kmaxVariants: parameters.kmaxVariants,
-                l: parameters.l,
-                p: parameters.p,
-                tau: parameters.tau,
-                alpha: parameters.alpha,
-                beta: parameters.beta,
-                cRange: parameters.cRange,
-                bRange: parameters.bRange,
-                omegaRange: parameters.omegaRange
-            };
+        const dataToSend = {
+            count: parameters.count,
+            n: parameters.n,
+            m: parameters.m,
+            kmaxVariants: parameters.kmaxVariants,
+            l: parameters.l,
+            p: parameters.p,
+            tau: parameters.tau,
+            alpha: parameters.alpha,
+            beta: parameters.beta,
+            cRange: parameters.cRange,
+            bRange: parameters.bRange,
+            omegaRange: parameters.omegaRange
+        };
 
+        if (USE_TEMPORAL_API) {
+            void stream.start('/experiment1', dataToSend);
+        } else if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             ws.current.send(JSON.stringify(dataToSend));
         } else {
             console.error('WebSocket is not connected');
@@ -183,15 +211,19 @@ const Experiment1 = () => {
     };
 
     const handleClear = () => {
-        setResults([]);
+        if (USE_TEMPORAL_API) {
+            void stream.cancel();
+        } else {
+            setResults([]);
+        }
     };
 
     const exportToCSV = () => {
-        if (results.length === 0) return;
+        if (displayResults.length === 0) return;
 
         const headers = ['#,K,Час ЙМ,ЦФ ЙМ,Час МК,ЦФ МК,Відносна різниця\n'];
 
-        const csvData = results.map((result, index) => {
+        const csvData = displayResults.map((result, index) => {
             return `${index + 1},${result.kmax},${result.probTime.toFixed(4)},${result.probValue},${result.antTime.toFixed(4)},${result.antValue},${result.relativeDiff.toFixed(2)}\n`;
         });
 
@@ -505,20 +537,37 @@ const Experiment1 = () => {
                 <div className="m-5">
                     <Button onClick={handleSolve}>Solve</Button>
                     <Button variant="outline" onClick={handleClear} className="mx-5">Clear</Button>
+                    {USE_TEMPORAL_API && stream.status === 'running' && (
+                        <Button variant="destructive" onClick={() => void stream.cancel()} className="mr-5">Відмінити</Button>
+                    )}
                     <Button
                         variant="secondary"
                         onClick={exportToCSV}
-                        disabled={results.length === 0}
+                        disabled={displayResults.length === 0}
                     >
                         Export to CSV
                     </Button>
+
+                    {USE_TEMPORAL_API && stream.status === 'running' && stream.progress && (
+                        <div className="mt-4">
+                            <p className="text-sm text-gray-500 mb-1">
+                                Прогрес: {stream.progress.completed} / {stream.progress.total}
+                            </p>
+                            <div className="w-full bg-secondary rounded-full h-2">
+                                <div
+                                    className="bg-primary h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${stream.progress.total > 0 ? Math.round((stream.progress.completed / stream.progress.total) * 100) : 0}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-8">
                         <h3 className="text-lg font-semibold mb-4">Залежність часу від Kmax</h3>
                         <div className="h-[400px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart
-                                    data={results}
+                                    data={displayResults}
                                     margin={{
                                         top: 5,
                                         right: 30,
@@ -543,7 +592,7 @@ const Experiment1 = () => {
                         <div className="h-[400px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart
-                                    data={results}
+                                    data={displayResults}
                                     margin={{
                                         top: 5,
                                         right: 30,
@@ -576,7 +625,7 @@ const Experiment1 = () => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {results.map((result, index) => (
+                            {displayResults.map((result, index) => (
                                 <TableRow key={index}>
                                     <TableCell>{index+1}</TableCell>
                                     <TableCell>{result.kmax}</TableCell>
