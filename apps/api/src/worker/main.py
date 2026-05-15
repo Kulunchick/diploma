@@ -1,5 +1,6 @@
 import asyncio
 
+from redis.asyncio import Redis
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -7,13 +8,17 @@ from temporalio.worker import Worker
 from src.worker.activities import (
     generate_experiment_runs_activity,
     run_algorithm_activity,
+    set_redis_client,
 )
-from src.worker.config import TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPACE
+from src.worker.config import REDIS_URL, TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 from src.worker.workflows.experiment import ExperimentWorkflow
 from src.worker.workflows.solve import SolveWorkflow
 
 
 async def main() -> None:
+    redis = Redis.from_url(REDIS_URL, decode_responses=True)
+    set_redis_client(redis)
+
     client = await Client.connect(
         TEMPORAL_HOST,
         namespace=TEMPORAL_NAMESPACE,
@@ -28,7 +33,10 @@ async def main() -> None:
     )
 
     print(f"Worker started — task queue: {TASK_QUEUE!r}, host: {TEMPORAL_HOST}")
-    await worker.run()
+    try:
+        await worker.run()
+    finally:
+        await redis.aclose()
 
 
 if __name__ == "__main__":
