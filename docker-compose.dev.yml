@@ -1,6 +1,10 @@
 version: "3.8"
 
 services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+
   postgresql:
     image: postgres:16-alpine
     container_name: dev-postgresql
@@ -55,3 +59,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: dev-api
+    depends_on:
+      temporal:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TASK_QUEUE: coursework-operations
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8000:8000"
+    command: ["python", "-m", "src.coursework_operations.main"]
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: dev-worker
+    depends_on:
+      temporal:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TASK_QUEUE: coursework-operations
+      REDIS_URL: redis://redis:6379
+    command: ["python", "-m", "src.worker.main"]

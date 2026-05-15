@@ -1,5 +1,5 @@
 # Етап збірки
-FROM python:slim AS builder
+FROM python:3.13-slim AS builder
 
 # Встановлюємо системні залежності для збірки
 RUN apt-get update && apt-get install -y \
@@ -14,12 +14,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-RUN uv venv .venv
-COPY requirements.lock ./
-RUN uv pip install --no-cache -r requirements.lock
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Фінальний етап
-FROM python:slim
+FROM python:3.13-slim
 
 # Копіюємо лише необхідні бібліотеки з етапу збірки
 COPY --from=builder /app/.venv /app/.venv
