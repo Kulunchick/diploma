@@ -110,7 +110,6 @@ services:
         # VITE_* vars are baked into the JS bundle at build time by Vite.
         # The browser connects to the API via localhost — not the container name.
         VITE_WS_BASE_URL: ws://localhost:8000
-        VITE_USE_TEMPORAL_API: "true"
     container_name: dev-ui
     depends_on:
       - api

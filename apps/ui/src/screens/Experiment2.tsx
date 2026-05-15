@@ -1,8 +1,7 @@
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import {ValidatedInput} from "@/components/ui/validated-input"
-import {useState, useEffect, useMemo, useRef} from "react"
-import {USE_TEMPORAL_API} from "@/config";
+import {useState, useMemo} from "react"
 import {useJobStream} from "@/hooks/useJobStream";
 import type {ExperimentData} from "@/api/types";
 import {X} from "lucide-react"
@@ -58,22 +57,6 @@ interface AlgorithmResult {
     relativeDiff: number;
 }
 
-interface WebSocketResponse {
-    type: string;
-    data: {
-        [key: string]: {
-            ant: {
-                avg_value: number;
-                avg_time: number;
-            };
-            prob: {
-                avg_value: number;
-                avg_time: number;
-            };
-            relative_difference: number;
-        };
-    };
-}
 
 const Experiment2 = () => {
     const [parameters, setParameters] = useState<EffectParameters>({
@@ -93,11 +76,9 @@ const Experiment2 = () => {
 
     const [beta, setBeta] = useState<number>(1.0);
 
-    const [results, setResults] = useState<AlgorithmResult[]>([]);
-
     const stream = useJobStream<ExperimentData>({ streamMessages: false });
 
-    const temporalResults = useMemo<AlgorithmResult[]>(() => {
+    const results = useMemo<AlgorithmResult[]>(() => {
         if (!stream.result) return [];
         return Object.entries(stream.result)
             .map(([key, data]) => ({
@@ -111,79 +92,8 @@ const Experiment2 = () => {
             .sort((a, b) => a.beta - b.beta);
     }, [stream.result]);
 
-    const displayResults = USE_TEMPORAL_API ? temporalResults : results;
-
-    const ws = useRef<WebSocket | null>(null);
-    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    const RECONNECT_DELAY = 3000;
-
-    useEffect(() => {
-        if (USE_TEMPORAL_API) return;
-        let reconnectAttempts = 0;
-
-        const connectWebSocket = () => {
-            try {
-                const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000';
-
-                ws.current = new WebSocket(`${WS_BASE_URL}/ws/experiment2`);
-
-                ws.current.onopen = () => {
-                    console.log('Connected to WebSocket');
-                    reconnectAttempts = 0;
-                };
-
-                ws.current.onmessage = (event) => {
-                    const response: WebSocketResponse = JSON.parse(event.data);
-                    if (response.type === 'results') {
-                        const newResults = Object.entries(response.data)
-                            .map(([beta, data]) => ({
-                                beta: Number(beta),
-                                antValue: data.ant.avg_value,
-                                antTime: data.ant.avg_time,
-                                probValue: data.prob.avg_value,
-                                probTime: data.prob.avg_time,
-                                relativeDiff: data.relative_difference
-                            }))
-                            .sort((a, b) => a.beta - b.beta);
-                        setResults(newResults);
-                    }
-                };
-
-                ws.current.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                };
-
-                ws.current.onclose = () => {
-                    console.log('WebSocket connection closed');
-
-                    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                        reconnectTimeoutRef.current = setTimeout(() => {
-                            reconnectAttempts++;
-                            console.log(`Reconnecting... Attempt ${reconnectAttempts}`);
-                            connectWebSocket();
-                        }, RECONNECT_DELAY);
-                    }
-                };
-            } catch (error) {
-                console.error('Failed to connect:', error);
-            }
-        };
-
-        connectWebSocket();
-
-        return () => {
-            if (reconnectTimeoutRef.current) {
-                clearTimeout(reconnectTimeoutRef.current);
-            }
-            if (ws.current) {
-                ws.current.close();
-            }
-        };
-    }, []);
-
     const handleSolve = () => {
-        const dataToSend = {
+        void stream.start('/experiment2', {
             count: parameters.count,
             betaVariants: parameters.betaVariants,
             p: parameters.p,
@@ -195,32 +105,20 @@ const Experiment2 = () => {
             antKmax: parameters.antKmax,
             m: parameters.m,
             n: parameters.n,
-            l: parameters.l
-        };
-
-        if (USE_TEMPORAL_API) {
-            void stream.start('/experiment2', dataToSend);
-        } else if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify(dataToSend));
-        } else {
-            console.error('WebSocket is not connected');
-        }
+            l: parameters.l,
+        });
     };
 
     const handleClear = () => {
-        if (USE_TEMPORAL_API) {
-            void stream.cancel();
-        } else {
-            setResults([]);
-        }
+        void stream.cancel();
     };
 
     const exportToCSV = () => {
-        if (displayResults.length === 0) return;
+        if (results.length === 0) return;
 
         const headers = ['#,β,ЦФ МК,Час МК,ЦФ ЙМ,Час ЙМ,Відносна різниця\n'];
 
-        const csvData = displayResults.map((result, index) => {
+        const csvData = results.map((result, index) => {
             return `${index + 1},${result.beta},${result.antValue},${result.antTime.toFixed(4)},${result.probValue},${result.probTime.toFixed(4)},${result.relativeDiff.toFixed(2)}\n`;
         });
 
@@ -541,7 +439,7 @@ const Experiment2 = () => {
                     <Button
                         variant="secondary"
                         onClick={exportToCSV}
-                        disabled={displayResults.length === 0}
+                        disabled={results.length === 0}
                     >
                         Export to CSV
                     </Button>
@@ -565,7 +463,7 @@ const Experiment2 = () => {
                         <div className="h-[400px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart
-                                    data={displayResults}
+                                    data={results}
                                     margin={{
                                         top: 5,
                                         right: 30,
@@ -593,7 +491,7 @@ const Experiment2 = () => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {displayResults.map((result, index) => (
+                            {results.map((result, index) => (
                                 <TableRow key={index}>
                                     <TableCell>{index+1}</TableCell>
                                     <TableCell>{result.beta}</TableCell>

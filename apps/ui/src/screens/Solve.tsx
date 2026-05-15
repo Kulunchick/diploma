@@ -2,11 +2,10 @@ import {Card, CardHeader, CardTitle, CardContent} from "@/components/ui/card.tsx
 import {Input} from "@/components/ui/input.tsx"
 import {ValidatedInput} from "@/components/ui/validated-input.tsx"
 import {Button} from "@/components/ui/button.tsx"
-import {useEffect, useMemo, useRef, useState} from "react"
+import {useMemo, useState} from "react"
 
 import {Matrix} from "@/components/Matrix.tsx";
 import {Chart} from "@/components/Chart.tsx";
-import {USE_TEMPORAL_API} from "@/config";
 import {useJobStream} from "@/hooks/useJobStream";
 import type {SolveResult} from "@/api/types";
 
@@ -60,7 +59,6 @@ export default function Solve() {
         );
     };
 
-
     const [antColonyParams, setAntColonyParams] = useState({
         Kmax: 100,
         num_ants: 20,
@@ -73,24 +71,42 @@ export default function Solve() {
         Kmax: 100
     });
 
-    const [probSolution, setProbSolution] = useState<number[][]>(createMatrix(3, 3, 0));
-    const [antSolution, setAntSolution] = useState<number[][]>(createMatrix(3, 3, 0));
-    const [probValue, setProbValue] = useState<number>(0);
-    const [antValue, setAntValue] = useState<number>(0);
-    const [chartData, setChartData] = useState<Array<{
-        iteration: number;
-        aco: number;
-        prob: number;
-    }>>([]);
+    const [columnLabels, setColumnLabels] = useState<string[]>(["Company 1", "Company 2", "Company 3"])
+    const [rowLabels, setRowLabels] = useState<string[]>(["Technic 1", "Technic 2", "Technic 3"])
+    const [newColumnLabel, setNewColumnLabel] = useState("")
+    const [newRowLabel, setNewRowLabel] = useState("")
 
-    // -------------------------------------------------------------------------
-    // Temporal API path (active when VITE_USE_TEMPORAL_API=true)
-    // -------------------------------------------------------------------------
+    const addColumn = () => {
+        setPriceMatrix(prev => prev.map(row => [...row, 0]))
+        setResourceMatrix(prev => prev.map(row => [...row, 0]))
+        setDiscountMatrix(prev => prev.map(row => [...row, 0]))
+        setColumnLabels(prev => [...prev, newColumnLabel || `Company ${prev.length + 1}`])
+        setNewColumnLabel("")
+    }
+
+    const addRow = () => {
+        setPriceMatrix(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
+        setResourceMatrix(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
+        setDiscountMatrix(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
+        setRowLabels(prev => [...prev, newRowLabel || `Technic ${prev.length + 1}`])
+        setNewRowLabel("")
+    }
+
+    const removeColumn = (colIndex: number) => {
+        setPriceMatrix(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
+        setResourceMatrix(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
+        setDiscountMatrix(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
+    };
+
+    const removeRow = (rowIndex: number) => {
+        setPriceMatrix(prev => prev.filter((_, index) => index !== rowIndex));
+        setResourceMatrix(prev => prev.filter((_, index) => index !== rowIndex));
+        setDiscountMatrix(prev => prev.filter((_, index) => index !== rowIndex));
+    };
+
     const stream = useJobStream<SolveResult>({ streamMessages: true });
 
-    // Build chart data from the streamed message history.
-    // Merges iteration messages by iteration number (same logic as the legacy onmessage).
-    const temporalChartData = useMemo(() => {
+    const chartData = useMemo(() => {
         const data: Array<{ iteration: number; aco: number; prob: number }> = [];
         for (const msg of stream.messages) {
             if (msg.type !== 'iteration') continue;
@@ -110,145 +126,12 @@ export default function Solve() {
         return data;
     }, [stream.messages]);
 
-    // Effective display values — hook data when temporal, legacy state otherwise.
-    const displayChartData    = USE_TEMPORAL_API ? temporalChartData : chartData;
-    const displayProbSolution = USE_TEMPORAL_API ? (stream.result?.probabilistic?.solution ?? probSolution) : probSolution;
-    const displayAntSolution  = USE_TEMPORAL_API ? (stream.result?.ant_colony?.solution  ?? antSolution)  : antSolution;
-    const displayProbValue    = USE_TEMPORAL_API ? (stream.result?.probabilistic?.value  ?? probValue)  : probValue;
-    const displayAntValue     = USE_TEMPORAL_API ? (stream.result?.ant_colony?.value     ?? antValue)   : antValue;
-
-    const [columnLabels, setColumnLabels] = useState<string[]>(["Company 1", "Company 2", "Company 3"])
-    const [rowLabels, setRowLabels] = useState<string[]>(["Technic 1", "Technic 2", "Technic 3"])
-    const [newColumnLabel, setNewColumnLabel] = useState("")
-    const [newRowLabel, setNewRowLabel] = useState("")
-
-    const addColumn = () => {
-        setPriceMatrix(prev => prev.map(row => [...row, 0]))
-        setResourceMatrix(prev => prev.map(row => [...row, 0]))
-        setDiscountMatrix(prev => prev.map(row => [...row, 0]))
-        setProbSolution(prev => prev.map(row => [...row, 0]))
-        setAntSolution(prev => prev.map(row => [...row, 0]))
-        setColumnLabels(prev => [...prev, newColumnLabel || `Company ${prev.length + 1}`])
-        setNewColumnLabel("")
-    }
-
-    const addRow = () => {
-        setPriceMatrix(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
-        setResourceMatrix(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
-        setDiscountMatrix(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
-        setProbSolution(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
-        setAntSolution(prev => [...prev, Array(prev[0]?.length || 0).fill(0)])
-        setRowLabels(prev => [...prev, newRowLabel || `Technic ${prev.length + 1}`])
-        setNewRowLabel("")
-    }
-
-    const removeColumn = (colIndex: number) => {
-        setPriceMatrix(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
-        setResourceMatrix(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
-        setDiscountMatrix(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
-        setProbSolution(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
-        setAntSolution(prev => prev.map(row => row.filter((_, index) => index !== colIndex)));
-    };
-
-    const removeRow = (rowIndex: number) => {
-        setPriceMatrix(prev => prev.filter((_, index) => index !== rowIndex));
-        setResourceMatrix(prev => prev.filter((_, index) => index !== rowIndex));
-        setDiscountMatrix(prev => prev.filter((_, index) => index !== rowIndex));
-        setProbSolution(prev => prev.filter((_, index) => index !== rowIndex));
-        setAntSolution(prev => prev.filter((_, index) => index !== rowIndex));
-    };
-
-
-    const webSocket = useRef<WebSocket | null>(null);
-    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    const RECONNECT_DELAY = 3000;
-
-    useEffect(() => {
-        // Skip legacy WS when the temporal flow is active.
-        if (USE_TEMPORAL_API) return;
-
-        let reconnectAttempts = 0;
-
-        const connectWebSocket = () => {
-            try {
-                const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000';
-
-                webSocket.current = new WebSocket(`${WS_BASE_URL}/ws/solve`);
-
-                webSocket.current.onopen = () => {
-                    console.log("Connected to WebSocket");
-                    reconnectAttempts = 0;
-                };
-
-                webSocket.current.onclose = () => {
-                    console.log("WebSocket connection closed");
-
-                    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                        reconnectTimeoutRef.current = setTimeout(() => {
-                            reconnectAttempts++;
-                            console.log(`Reconnecting... Attempt ${reconnectAttempts}`);
-                            connectWebSocket();
-                        }, RECONNECT_DELAY);
-                    }
-                };
-
-                webSocket.current.onerror = (error) => {
-                    console.error("WebSocket error:", error);
-                };
-
-                webSocket.current.onmessage = (event) => {
-                    const message = JSON.parse(event.data);
-
-                    if (message.type === "iteration") {
-                        setChartData(prev => {
-                            const existingDataPoint = prev.find(p => p.iteration === message.iteration);
-
-                            if (existingDataPoint) {
-                                return prev.map(point => {
-                                    if (point.iteration === message.iteration) {
-                                        return {
-                                            ...point,
-                                            [message.algorithm === "probabilistic" ? "prob" : "aco"]: Math.round(message.current_best_value)
-                                        };
-                                    }
-                                    return point;
-                                });
-                            }
-
-                            const lastPoint = prev[prev.length - 1] || { aco: 0, prob: 0 };
-                            return [...prev, {
-                                iteration: message.iteration,
-                                aco: message.algorithm === "ant_colony" ? Math.round(message.current_best_value) : lastPoint.aco,
-                                prob: message.algorithm === "probabilistic" ? Math.round(message.current_best_value) : lastPoint.prob
-                            }];
-                        });
-
-                    } else if (message.type === "result") {
-                        if (message.algorithm === "probabilistic") {
-                            setProbSolution(message.solution)
-                            setProbValue(message.value);
-                        } else {
-                            setAntSolution(message.solution)
-                            setAntValue(message.value);
-                        }
-                    }
-                };
-
-            } catch (error) {
-                console.error("Failed to connect:", error);
-            }
-        };
-
-        connectWebSocket();
-
-        return () => {
-            if (reconnectTimeoutRef.current) {
-                clearTimeout(reconnectTimeoutRef.current);
-            }
-            webSocket.current?.close();
-        };
-    }, []);
+    const m = priceMatrix.length;
+    const n = priceMatrix[0]?.length ?? 3;
+    const probSolution = stream.result?.probabilistic?.solution ?? createMatrix(m, n, 0);
+    const antSolution  = stream.result?.ant_colony?.solution  ?? createMatrix(m, n, 0);
+    const probValue    = stream.result?.probabilistic?.value  ?? 0;
+    const antValue     = stream.result?.ant_colony?.value     ?? 0;
 
     const handleSolve = () => {
         const data: WebSocketData = {
@@ -263,13 +146,7 @@ export default function Solve() {
                 probabilistic: probabilisticParams
             }
         };
-
-        if (USE_TEMPORAL_API) {
-            void stream.start('/solve', data);
-        } else if (webSocket.current?.readyState === WebSocket.OPEN) {
-            webSocket.current.send(JSON.stringify(data));
-            setChartData([]);
-        }
+        void stream.start('/solve', data);
     };
 
     return (
@@ -345,7 +222,6 @@ export default function Solve() {
                         >
                             Randomize
                         </Button>
-
                     </div>
                 </div>
             </Card>
@@ -407,12 +283,6 @@ export default function Solve() {
                     <div className="flex justify-end">
                         <Button
                             onClick={() => {
-                                // const newMatrix = randomizeMatrix(resourceMatrix, resourceMinMax.min, resourceMinMax.max);
-                                // setResourceMatrix(newMatrix);
-                                // // Автоматично встановлюємо загальний ресурс як суму всіх елементів помножену на 1.2
-                                // const totalSum = newMatrix.reduce((sum, row) =>
-                                //     sum + row.reduce((rowSum, cell) => rowSum + cell, 0), 0);
-                                // setTotalResource(Math.round(totalSum / 10));
                                 const newMatrix = randomizeMatrix(resourceMatrix, resourceMinMax.min, resourceMinMax.max);
                                 setResourceMatrix(newMatrix);
                                 const totalSum = newMatrix.reduce((sum, row) =>
@@ -423,7 +293,6 @@ export default function Solve() {
                         >
                             Randomize
                         </Button>
-
                     </div>
                 </div>
             </Card>
@@ -476,7 +345,6 @@ export default function Solve() {
                         >
                             Randomize
                         </Button>
-
                     </div>
                 </div>
             </Card>
@@ -485,7 +353,6 @@ export default function Solve() {
                 <CardHeader>
                     <CardTitle>Ймовірнісний алгоритм</CardTitle>
                 </CardHeader>
-
                 <CardContent>
                     <div className="max-w-sm flex gap-2">
                         <div className="flex gap-2 items-center max-w-30">
@@ -510,7 +377,6 @@ export default function Solve() {
                 <CardHeader>
                     <CardTitle>Алгоритм мурашиних колоній</CardTitle>
                 </CardHeader>
-
                 <CardContent>
                     <div className="max-w-2xl flex gap-2">
                         <div className="flex gap-2 items-center max-w-30">
@@ -528,7 +394,6 @@ export default function Solve() {
                                 isInteger={true}
                             />
                         </div>
-
                         <div className="flex gap-2 items-center max-w-30">
                         <label className="text-gray-500 text-[14px]">L:</label>
                             <ValidatedInput
@@ -544,7 +409,6 @@ export default function Solve() {
                                 isInteger={true}
                             />
                         </div>
-
                         <div className="flex gap-2 items-center max-w-30">
                         <label className="text-gray-500 text-[14px]">α:</label>
                             <ValidatedInput
@@ -559,7 +423,6 @@ export default function Solve() {
                                 step={0.1}
                             />
                         </div>
-
                         <div className="flex gap-2 items-center max-w-30">
                         <label className="text-gray-500 text-[14px]">β:</label>
                             <ValidatedInput
@@ -574,7 +437,6 @@ export default function Solve() {
                                 step={0.1}
                             />
                         </div>
-
                         <div className="flex gap-2 items-center max-w-30">
                         <label className="text-gray-500 text-[14px]">p:</label>
                             <ValidatedInput
@@ -590,7 +452,6 @@ export default function Solve() {
                                 step={0.1}
                             />
                         </div>
-
                         <div className="flex gap-2 items-center max-w-30">
                         <label className="text-gray-500 text-[14px]">τ0:</label>
                             <ValidatedInput
@@ -616,23 +477,22 @@ export default function Solve() {
                     </div>
                     <h2 className="mt-6 mb-4">Ймовірнісний алгоритм</h2>
                     <Matrix
-                        matrix={displayProbSolution}
-                        setMatrix={setProbSolution}
+                        matrix={probSolution}
+                        setMatrix={() => {}}
                         columnLabels={columnLabels}
                         setColumnLabels={setColumnLabels}
                         rowLabels={rowLabels}
                         setRowLabels={setRowLabels}
                         isDisabled={true}
-                      
                         showControls={false}
                     />
                     <div className="flex gap-2 mt-6 my-5 items-center max-w-30">
-                        <ValidatedInput type="number" disabled id="output" value={displayProbValue} placeholder="Output"/>
+                        <ValidatedInput type="number" disabled id="output" value={probValue} placeholder="Output"/>
                     </div>
                     <h2 className="mt-6 mb-4">Алгоритм мурашиних колоній</h2>
                     <Matrix
-                        matrix={displayAntSolution}
-                        setMatrix={setAntSolution}
+                        matrix={antSolution}
+                        setMatrix={() => {}}
                         columnLabels={columnLabels}
                         setColumnLabels={setColumnLabels}
                         rowLabels={rowLabels}
@@ -641,7 +501,7 @@ export default function Solve() {
                         showControls={false}
                     />
                     <div className="flex gap-2 mt-6 my-5 items-center max-w-30">
-                        <ValidatedInput type="number" disabled id="output" value={displayAntValue} placeholder="Output"/>
+                        <ValidatedInput type="number" disabled id="output" value={antValue} placeholder="Output"/>
                     </div>
                 </div>
             </Card>
@@ -651,7 +511,7 @@ export default function Solve() {
                     <CardTitle>Графік порівняння алгоритмів</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Chart data={displayChartData}/>
+                    <Chart data={chartData}/>
                 </CardContent>
             </Card>
         </div>

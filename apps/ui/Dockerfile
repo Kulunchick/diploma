@@ -14,9 +14,7 @@ COPY . .
 
 # Vite replaces import.meta.env.* at build time — pass vars as ARGs
 ARG VITE_WS_BASE_URL=ws://localhost:8000
-ARG VITE_USE_TEMPORAL_API=false
 ENV VITE_WS_BASE_URL=$VITE_WS_BASE_URL
-ENV VITE_USE_TEMPORAL_API=$VITE_USE_TEMPORAL_API
 
 # Будуємо застосунок
 RUN npm run build

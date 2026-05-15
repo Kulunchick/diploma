@@ -7,28 +7,8 @@ from redis.asyncio import Redis
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 
-from src.coursework_operations.routers import jobs, solve
-from src.coursework_operations.routers import experiments
+from src.coursework_operations.routers import experiments, jobs, solve
 from src.worker.config import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
-
-# ---------------------------------------------------------------------------
-# Legacy handlers (original WS endpoints, kept for rollback)
-# ---------------------------------------------------------------------------
-from src.coursework_operations.handlers.solve_handler import (
-    solve_handler as _solve_legacy,
-)
-from src.coursework_operations.handlers.experiment1_handler import (
-    experiment1_handler as _experiment1_legacy,
-)
-from src.coursework_operations.handlers.experiment2_handler import (
-    experiment2_handler as _experiment2_legacy,
-)
-from src.coursework_operations.handlers.experiment3_handler import (
-    experiment3_handler as _experiment3_legacy,
-)
-from src.coursework_operations.handlers.experiment4_handler import (
-    experiment4_handler as _experiment4_legacy,
-)
 
 
 @asynccontextmanager
@@ -58,21 +38,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# New Temporal-backed routes
-# ---------------------------------------------------------------------------
 app.include_router(solve.router)
 app.include_router(experiments.router)
 app.include_router(jobs.router)
-
-# ---------------------------------------------------------------------------
-# Legacy WebSocket routes — kept for rollback (switch URL on frontend)
-# ---------------------------------------------------------------------------
-app.add_api_websocket_route("/ws/solve_legacy", _solve_legacy)
-app.add_api_websocket_route("/ws/experiment1_legacy", _experiment1_legacy)
-app.add_api_websocket_route("/ws/experiment2_legacy", _experiment2_legacy)
-app.add_api_websocket_route("/ws/experiment3_legacy", _experiment3_legacy)
-app.add_api_websocket_route("/ws/experiment4_legacy", _experiment4_legacy)
 
 
 if __name__ == "__main__":
