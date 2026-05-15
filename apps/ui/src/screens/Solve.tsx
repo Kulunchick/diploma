@@ -2,10 +2,13 @@ import {Card, CardHeader, CardTitle, CardContent} from "@/components/ui/card.tsx
 import {Input} from "@/components/ui/input.tsx"
 import {ValidatedInput} from "@/components/ui/validated-input.tsx"
 import {Button} from "@/components/ui/button.tsx"
-import {useEffect, useRef, useState} from "react"
+import {useEffect, useMemo, useRef, useState} from "react"
 
 import {Matrix} from "@/components/Matrix.tsx";
 import {Chart} from "@/components/Chart.tsx";
+import {USE_TEMPORAL_API} from "@/config";
+import {useJobStream} from "@/hooks/useJobStream";
+import type {SolveResult} from "@/api/types";
 
 interface AlgorithmParameters {
     ant_colony: {
@@ -80,6 +83,40 @@ export default function Solve() {
         prob: number;
     }>>([]);
 
+    // -------------------------------------------------------------------------
+    // Temporal API path (active when VITE_USE_TEMPORAL_API=true)
+    // -------------------------------------------------------------------------
+    const stream = useJobStream<SolveResult>({ streamMessages: true });
+
+    // Build chart data from the streamed message history.
+    // Merges iteration messages by iteration number (same logic as the legacy onmessage).
+    const temporalChartData = useMemo(() => {
+        const data: Array<{ iteration: number; aco: number; prob: number }> = [];
+        for (const msg of stream.messages) {
+            if (msg.type !== 'iteration') continue;
+            const existing = data.find(p => p.iteration === msg.iteration);
+            if (existing) {
+                if (msg.algorithm === 'ant_colony') existing.aco = Math.round(msg.current_best_value);
+                else existing.prob = Math.round(msg.current_best_value);
+            } else {
+                const last = data[data.length - 1] ?? { aco: 0, prob: 0 };
+                data.push({
+                    iteration: msg.iteration,
+                    aco: msg.algorithm === 'ant_colony' ? Math.round(msg.current_best_value) : last.aco,
+                    prob: msg.algorithm === 'probabilistic' ? Math.round(msg.current_best_value) : last.prob,
+                });
+            }
+        }
+        return data;
+    }, [stream.messages]);
+
+    // Effective display values — hook data when temporal, legacy state otherwise.
+    const displayChartData    = USE_TEMPORAL_API ? temporalChartData : chartData;
+    const displayProbSolution = USE_TEMPORAL_API ? (stream.result?.probabilistic?.solution ?? probSolution) : probSolution;
+    const displayAntSolution  = USE_TEMPORAL_API ? (stream.result?.ant_colony?.solution  ?? antSolution)  : antSolution;
+    const displayProbValue    = USE_TEMPORAL_API ? (stream.result?.probabilistic?.value  ?? probValue)  : probValue;
+    const displayAntValue     = USE_TEMPORAL_API ? (stream.result?.ant_colony?.value     ?? antValue)   : antValue;
+
     const [columnLabels, setColumnLabels] = useState<string[]>(["Company 1", "Company 2", "Company 3"])
     const [rowLabels, setRowLabels] = useState<string[]>(["Technic 1", "Technic 2", "Technic 3"])
     const [newColumnLabel, setNewColumnLabel] = useState("")
@@ -128,6 +165,9 @@ export default function Solve() {
     const RECONNECT_DELAY = 3000;
 
     useEffect(() => {
+        // Skip legacy WS when the temporal flow is active.
+        if (USE_TEMPORAL_API) return;
+
         let reconnectAttempts = 0;
 
         const connectWebSocket = () => {
@@ -211,20 +251,22 @@ export default function Solve() {
     }, []);
 
     const handleSolve = () => {
-        if (webSocket.current?.readyState === WebSocket.OPEN) {
-            const data: WebSocketData = {
-                m: resourceMatrix.length,
-                n: resourceMatrix[0].length,
-                c: priceMatrix,
-                B_ij: resourceMatrix,
-                B_total: totalResource,
-                omega: discountMatrix,
-                algorithm_parameters: {
-                    ant_colony: antColonyParams,
-                    probabilistic: probabilisticParams
-                }
-            };
+        const data: WebSocketData = {
+            m: resourceMatrix.length,
+            n: resourceMatrix[0].length,
+            c: priceMatrix,
+            B_ij: resourceMatrix,
+            B_total: totalResource,
+            omega: discountMatrix,
+            algorithm_parameters: {
+                ant_colony: antColonyParams,
+                probabilistic: probabilisticParams
+            }
+        };
 
+        if (USE_TEMPORAL_API) {
+            void stream.start('/solve', data);
+        } else if (webSocket.current?.readyState === WebSocket.OPEN) {
             webSocket.current.send(JSON.stringify(data));
             setChartData([]);
         }
@@ -574,7 +616,7 @@ export default function Solve() {
                     </div>
                     <h2 className="mt-6 mb-4">Ймовірнісний алгоритм</h2>
                     <Matrix
-                        matrix={probSolution}
+                        matrix={displayProbSolution}
                         setMatrix={setProbSolution}
                         columnLabels={columnLabels}
                         setColumnLabels={setColumnLabels}
@@ -585,11 +627,11 @@ export default function Solve() {
                         showControls={false}
                     />
                     <div className="flex gap-2 mt-6 my-5 items-center max-w-30">
-                        <ValidatedInput type="number" disabled id="output" value={probValue} placeholder="Output"/>
+                        <ValidatedInput type="number" disabled id="output" value={displayProbValue} placeholder="Output"/>
                     </div>
                     <h2 className="mt-6 mb-4">Алгоритм мурашиних колоній</h2>
                     <Matrix
-                        matrix={antSolution}
+                        matrix={displayAntSolution}
                         setMatrix={setAntSolution}
                         columnLabels={columnLabels}
                         setColumnLabels={setColumnLabels}
@@ -599,7 +641,7 @@ export default function Solve() {
                         showControls={false}
                     />
                     <div className="flex gap-2 mt-6 my-5 items-center max-w-30">
-                        <ValidatedInput type="number" disabled id="output" value={antValue} placeholder="Output"/>
+                        <ValidatedInput type="number" disabled id="output" value={displayAntValue} placeholder="Output"/>
                     </div>
                 </div>
             </Card>
@@ -609,7 +651,7 @@ export default function Solve() {
                     <CardTitle>Графік порівняння алгоритмів</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Chart data={chartData}/>
+                    <Chart data={displayChartData}/>
                 </CardContent>
             </Card>
         </div>
