@@ -3,12 +3,8 @@ from typing import Protocol
 
 from pydantic import BaseModel, RootModel
 
-from src.worker.types import RunAlgorithmInput, RunResult
+from worker.types import RunAlgorithmInput, RunResult
 
-
-# ---------------------------------------------------------------------------
-# Shared domain types used by all 4 experiment specs
-# ---------------------------------------------------------------------------
 
 class Range(BaseModel):
     min: float
@@ -27,18 +23,10 @@ class VariantStats(BaseModel):
 
 
 class ExperimentStatsResult(RootModel[dict[str, VariantStats]]):
-    """
-    Root model so that .model_dump() returns the flat {variant_key: stats} dict
-    that matches the legacy {"type":"results","data":{...}} format.
-    """
+    """RootModel so .model_dump() returns the flat {variant_key: stats} dict."""
 
-
-# ---------------------------------------------------------------------------
-# Shared aggregation helper (pure — no I/O, no random)
-# ---------------------------------------------------------------------------
 
 def aggregate_to_stats(results: list[RunResult]) -> ExperimentStatsResult:
-    """Groups RunResults by variant_key, computes per-algorithm averages."""
     buckets: dict[str, dict] = defaultdict(
         lambda: {
             "ant_colony": {"values": [], "times": []},
@@ -75,30 +63,20 @@ def aggregate_to_stats(results: list[RunResult]) -> ExperimentStatsResult:
     return ExperimentStatsResult(final)
 
 
-# ---------------------------------------------------------------------------
-# ExperimentSpec Protocol
-# ---------------------------------------------------------------------------
-
 class ExperimentSpec(Protocol):
     name: str
     input_model: type[BaseModel]
     result_model: type[BaseModel]
 
     @staticmethod
-    def format_variant_key(variant) -> str:
-        """Single source of truth for variant → string key in results dict."""
-        ...
+    def format_variant_key(variant) -> str: ...
 
     @staticmethod
-    def generate_runs(input: BaseModel) -> list[RunAlgorithmInput]:
-        """Pure: no I/O, no time.time(). Random is OK (called from activity)."""
-        ...
+    def generate_runs(input: BaseModel) -> list[RunAlgorithmInput]: ...
 
     @staticmethod
     def aggregate(
         results: list[RunResult],
         runs: list[RunAlgorithmInput],
         input: BaseModel,
-    ) -> BaseModel:
-        """Pure: no I/O, no random, no time.time()."""
-        ...
+    ) -> BaseModel: ...

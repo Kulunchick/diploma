@@ -21,7 +21,7 @@ spec:
           # Replace with your actual registry and tag before deploying.
           image: <REGISTRY>/coursework-operations:latest
           imagePullPolicy: Always
-          command: ["python", "-m", "src.worker.main"]
+          command: ["python", "-m", "worker.main"]
           envFrom:
             - configMapRef:
                 name: coursework-config

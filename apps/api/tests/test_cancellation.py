@@ -16,15 +16,15 @@ from temporalio.exceptions import CancelledError as TemporalCancelledError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from src.worker.activities import generate_experiment_runs_activity, run_algorithm_activity
-from src.worker.types import (
+from worker.activities import generate_experiment_runs_activity, run_algorithm_activity
+from worker.types import (
     AntColonyParams,
     ExperimentInput,
     ProbabilisticParams,
     SolveInput,
 )
-from src.worker.workflows.experiment import ExperimentWorkflow
-from src.worker.workflows.solve import SolveWorkflow
+from worker.workflows.experiment import ExperimentWorkflow
+from worker.workflows.solve import SolveWorkflow
 
 _SOLVE_INPUT = SolveInput(
     m=2, n=2,

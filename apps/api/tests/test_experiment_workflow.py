@@ -6,17 +6,17 @@ import pytest
 from temporalio.testing import ActivityEnvironment, WorkflowEnvironment
 from temporalio.worker import Worker
 
-from src.worker.activities import (
+from worker.activities import (
     generate_experiment_runs_activity,
     run_algorithm_activity,
 )
-from src.worker.types import (
+from worker.types import (
     ExperimentInput,
     ExperimentResult,
     GenerateRunsInput,
     RunAlgorithmInput,
 )
-from src.worker.workflows.experiment import ExperimentWorkflow
+from worker.workflows.experiment import ExperimentWorkflow
 
 
 # ---------------------------------------------------------------------------

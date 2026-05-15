@@ -5,9 +5,9 @@ import pytest
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from src.worker.activities import run_algorithm_activity, generate_experiment_runs_activity
-from src.worker.types import AntColonyParams, ProbabilisticParams, SolveInput, SolveResult
-from src.worker.workflows.solve import SolveWorkflow
+from worker.activities import run_algorithm_activity, generate_experiment_runs_activity
+from worker.types import AntColonyParams, ProbabilisticParams, SolveInput, SolveResult
+from worker.workflows.solve import SolveWorkflow
 
 _SOLVE_INPUT = SolveInput(
     m=2,

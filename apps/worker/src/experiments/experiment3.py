@@ -1,17 +1,11 @@
-"""
-Experiment 3: vary problem size (m×n) — compare algorithm scalability.
-
-Structure: count × |mnVariants| × 2 algorithms
-Task generation: INSIDE the variant loop (new task per (m,n) per iteration)
-alpha=1.0, beta=1.0 hardcoded for ant colony (not in input)
-"""
+"""Experiment 3: vary m×n size. alpha=1.0/beta=1.0 hardcoded."""
 from typing import List
 
 from pydantic import BaseModel
 
-from src.coursework_operations.utils.generator import TaskGenerator
-from src.experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
-from src.worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
+from experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
+from experiments.task_generator import TaskGenerator
+from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
 
 
 class MNVariant(BaseModel):
@@ -22,11 +16,11 @@ class MNVariant(BaseModel):
 class Experiment3Input(BaseModel):
     count: int
     mnVariants: List[MNVariant]
-    p: float        # rho
-    tau: float      # initial_pheromone
+    p: float
+    tau: float
     antKmax: int
     probKmax: int
-    l: int          # num_ants
+    l: int
     cRange: Range
     bRange: Range
     omegaRange: Range
@@ -51,7 +45,6 @@ class Experiment3Spec:
         runs: list[RunAlgorithmInput] = []
         for _ in range(input.count):
             for variant in input.mnVariants:
-                # New task per (m,n) variant — mirrors legacy loop structure
                 task = generator.generate_task(m=variant.m, n=variant.n)
                 key = Experiment3Spec.format_variant_key(variant)
                 base = dict(
@@ -61,25 +54,20 @@ class Experiment3Spec:
                     variant_key=key,
                 )
                 runs.append(RunAlgorithmInput(
-                    **base,
-                    algorithm="ant_colony",
+                    **base, algorithm="ant_colony",
                     ant_colony_params=AntColonyParams(
                         num_ants=input.l, kmax=input.antKmax,
-                        alpha=1.0, beta=1.0,  # hardcoded per legacy
+                        alpha=1.0, beta=1.0,
                         rho=input.p, initial_pheromone=input.tau,
                     ),
                 ))
                 runs.append(RunAlgorithmInput(
-                    **base,
-                    algorithm="probabilistic",
+                    **base, algorithm="probabilistic",
                     probabilistic_params=ProbabilisticParams(kmax=input.probKmax),
                 ))
         return runs
 
     @staticmethod
-    def aggregate(
-        results: list[RunResult],
-        runs: list[RunAlgorithmInput],
-        input: Experiment3Input,
-    ) -> ExperimentStatsResult:
+    def aggregate(results: list[RunResult], runs: list[RunAlgorithmInput],
+                  input: Experiment3Input) -> ExperimentStatsResult:
         return aggregate_to_stats(results)

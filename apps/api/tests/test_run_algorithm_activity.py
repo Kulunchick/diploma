@@ -6,8 +6,8 @@ import asyncio
 import pytest
 from temporalio.testing import ActivityEnvironment
 
-from src.worker.activities import run_algorithm_activity
-from src.worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
+from worker.activities import run_algorithm_activity
+from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
 
 # Minimal 2×3 task fixture
 TASK_KWARGS = dict(

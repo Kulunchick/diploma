@@ -12,7 +12,7 @@ from assignment_solver import (
 from redis.asyncio import Redis
 from temporalio import activity
 
-from src.worker.types import (
+from worker.types import (
     AntColonyParams,
     GenerateRunsInput,
     ProbabilisticParams,
@@ -20,7 +20,6 @@ from src.worker.types import (
     RunResult,
 )
 
-# Module-level Redis client, set once at worker startup via set_redis_client().
 _redis: Optional[Redis] = None
 
 
@@ -31,18 +30,6 @@ def set_redis_client(client: Redis) -> None:
 
 @activity.defn
 async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
-    """
-    Atomic unit: one run of one algorithm on one task.
-
-    Cancellation:
-    - Uses asyncio.wait(FIRST_COMPLETED) to race the executor against the heartbeat
-      monitor so that a Temporal cancellation request is detected promptly.
-    - When cancellation is detected, the executor future is cancelled.  The Rust
-      thread continues to completion in the background (no cancel token yet —
-      TODO: propagate via Rust binding when available).
-    - Iteration callbacks (redis_channel) fire from a foreign Rust thread →
-      asyncio.run_coroutine_threadsafe for both heartbeat and redis.publish.
-    """
     loop = asyncio.get_running_loop()
 
     rust_task = RustTask(
@@ -92,23 +79,18 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
     executor_task = asyncio.ensure_future(
         loop.run_in_executor(None, solver.solve, rust_task)
     )
-    # Background monitor: heartbeats every 10 s; raises if activity is cancelled.
     heartbeat_task = asyncio.create_task(_periodic_heartbeat())
 
     try:
-        # Race solver vs heartbeat monitor.  FIRST_COMPLETED returns as soon as
-        # either finishes — normal solve completion or cancellation signal.
         done, _ = await asyncio.wait(
             {executor_task, heartbeat_task},
             return_when=asyncio.FIRST_COMPLETED,
         )
 
         if executor_task in done:
-            # Normal path: solve finished before any cancellation.
             solution, value = executor_task.result()
             elapsed = time.perf_counter() - start
         else:
-            # Heartbeat task finished first → cancellation or unexpected error.
             exc = (
                 heartbeat_task.exception()
                 if not heartbeat_task.cancelled()
@@ -139,12 +121,7 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
 async def generate_experiment_runs_activity(
     input: GenerateRunsInput,
 ) -> list[RunAlgorithmInput]:
-    """
-    Generates the full list of RunAlgorithmInput for an experiment.
-    Runs as an activity (not in workflow) because TaskGenerator uses random.
-    Looks up the spec in EXPERIMENT_REGISTRY and delegates to spec.generate_runs().
-    """
-    from src.experiments.registry import EXPERIMENT_REGISTRY
+    from experiments.registry import EXPERIMENT_REGISTRY
 
     spec = EXPERIMENT_REGISTRY.get(input.experiment_type)
     if spec is None:
@@ -155,17 +132,10 @@ async def generate_experiment_runs_activity(
 
 
 async def _async_heartbeat(data: dict) -> None:
-    """Wraps synchronous activity.heartbeat() as a coroutine for run_coroutine_threadsafe."""
     activity.heartbeat(data)
 
 
 async def _periodic_heartbeat() -> None:
-    """
-    Heartbeats Temporal every 10 s for liveness.
-    activity.heartbeat() raises temporalio.exceptions.CancelledError when the
-    activity has been cancelled — this causes the task to finish with an exception,
-    which asyncio.wait(FIRST_COMPLETED) detects promptly.
-    """
     while True:
         await asyncio.sleep(10)
         activity.heartbeat({"status": "running"})

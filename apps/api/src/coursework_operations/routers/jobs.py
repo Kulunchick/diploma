@@ -7,9 +7,9 @@ from temporalio.client import Client, WorkflowExecutionStatus
 from temporalio.service import RPCError
 
 from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from src.worker.types import ExperimentResult, SolveResult
-from src.worker.workflows.experiment import ExperimentWorkflow
-from src.worker.workflows.solve import SolveWorkflow
+from worker.types import ExperimentResult, SolveResult
+from worker.workflows.experiment import ExperimentWorkflow
+from worker.workflows.solve import SolveWorkflow
 
 router = APIRouter(prefix="/jobs")
 

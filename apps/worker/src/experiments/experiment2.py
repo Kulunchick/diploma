@@ -1,16 +1,11 @@
-"""
-Experiment 2: vary beta — compare ant colony quality at different beta (pheromone weight).
-
-Structure: count × |betaVariants| × 2 algorithms
-Task generation: once per count iteration (same task for all beta variants)
-"""
+"""Experiment 2: vary beta."""
 from typing import List
 
 from pydantic import BaseModel
 
-from src.coursework_operations.utils.generator import TaskGenerator
-from src.experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
-from src.worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
+from experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
+from experiments.task_generator import TaskGenerator
+from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
 
 
 class BetaVariant(BaseModel):
@@ -20,13 +15,13 @@ class BetaVariant(BaseModel):
 class Experiment2Input(BaseModel):
     count: int
     betaVariants: List[BetaVariant]
-    p: float        # rho
-    tau: float      # initial_pheromone
+    p: float
+    tau: float
     alpha: float
-    antKmax: int    # kmax for both algorithms
+    antKmax: int
     m: int
     n: int
-    l: int          # num_ants
+    l: int
     cRange: Range
     bRange: Range
     omegaRange: Range
@@ -55,14 +50,12 @@ class Experiment2Spec:
             b_ij = task.B_ij.tolist()
             b_total = int(task.B_total)
             omega = task.omega.tolist()
-
             for variant in input.betaVariants:
                 key = Experiment2Spec.format_variant_key(variant)
                 base = dict(m=input.m, n=input.n, c=c, b_ij=b_ij,
                             b_total=b_total, omega=omega, variant_key=key)
                 runs.append(RunAlgorithmInput(
-                    **base,
-                    algorithm="ant_colony",
+                    **base, algorithm="ant_colony",
                     ant_colony_params=AntColonyParams(
                         num_ants=input.l, kmax=input.antKmax,
                         alpha=input.alpha, beta=variant.beta,
@@ -70,16 +63,12 @@ class Experiment2Spec:
                     ),
                 ))
                 runs.append(RunAlgorithmInput(
-                    **base,
-                    algorithm="probabilistic",
+                    **base, algorithm="probabilistic",
                     probabilistic_params=ProbabilisticParams(kmax=input.antKmax),
                 ))
         return runs
 
     @staticmethod
-    def aggregate(
-        results: list[RunResult],
-        runs: list[RunAlgorithmInput],
-        input: Experiment2Input,
-    ) -> ExperimentStatsResult:
+    def aggregate(results: list[RunResult], runs: list[RunAlgorithmInput],
+                  input: Experiment2Input) -> ExperimentStatsResult:
         return aggregate_to_stats(results)

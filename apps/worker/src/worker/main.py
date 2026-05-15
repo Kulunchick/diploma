@@ -5,14 +5,14 @@ from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
-from src.worker.activities import (
+from worker.activities import (
     generate_experiment_runs_activity,
     run_algorithm_activity,
     set_redis_client,
 )
-from src.worker.config import REDIS_URL, TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPACE
-from src.worker.workflows.experiment import ExperimentWorkflow
-from src.worker.workflows.solve import SolveWorkflow
+from worker.config import REDIS_URL, TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPACE
+from worker.workflows.experiment import ExperimentWorkflow
+from worker.workflows.solve import SolveWorkflow
 
 
 async def main() -> None:

@@ -51,6 +51,13 @@ COPY --from=builder /app/.venv /app/.venv
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Install the worker package (worker + experiments) into the same venv.
+# Its dependencies (pydantic, temporalio, redis, numpy) are already satisfied
+# by the api's uv sync above — so --no-deps avoids redundant reinstalls.
+COPY apps/worker/ /worker/
+ENV VIRTUAL_ENV=/app/.venv
+RUN uv pip install /worker/ --no-deps
+
 COPY apps/api/src src
 
 CMD ["python", "-m", "src.coursework_operations.main"]

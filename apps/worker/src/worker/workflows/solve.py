@@ -5,8 +5,8 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
-    from src.worker.activities import run_algorithm_activity
-    from src.worker.types import (
+    from worker.activities import run_algorithm_activity
+    from worker.types import (
         AlgorithmResult,
         RunAlgorithmInput,
         RunResult,
@@ -64,7 +64,6 @@ class SolveWorkflow:
         try:
             ant_result, prob_result = await asyncio.gather(run_ant(), run_prob())
         except asyncio.CancelledError:
-            # Mark any still-running algorithms as cancelled for the query.
             for key in ("ant_colony", "probabilistic"):
                 if self._state.get(key) == "running":
                     self._state[key] = "cancelled"

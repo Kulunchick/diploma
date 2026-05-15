@@ -100,7 +100,7 @@ services:
       TEMPORAL_NAMESPACE: default
       TASK_QUEUE: coursework-operations
       REDIS_URL: redis://redis:6379
-    command: ["python", "-m", "src.worker.main"]
+    command: ["python", "-m", "worker.main"]
 
   ui:
     build:

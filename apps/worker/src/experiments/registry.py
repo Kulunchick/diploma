@@ -1,16 +1,12 @@
 from pydantic import BaseModel
 
-from src.experiments.base import ExperimentSpec
-from src.experiments.experiment1 import Experiment1Spec
-from src.experiments.experiment2 import Experiment2Spec
-from src.experiments.experiment3 import Experiment3Spec
-from src.experiments.experiment4 import Experiment4Spec
-from src.worker.types import ProbabilisticParams, RunAlgorithmInput, RunResult
+from experiments.base import ExperimentSpec
+from experiments.experiment1 import Experiment1Spec
+from experiments.experiment2 import Experiment2Spec
+from experiments.experiment3 import Experiment3Spec
+from experiments.experiment4 import Experiment4Spec
+from worker.types import ProbabilisticParams, RunAlgorithmInput, RunResult
 
-
-# ---------------------------------------------------------------------------
-# "noop" spec — integration test fixture (step 5); kept for tests.
-# ---------------------------------------------------------------------------
 
 class _NoopInput(BaseModel):
     count: int = 3
@@ -53,10 +49,6 @@ class NoopSpec:
     ) -> _NoopResult:
         return _NoopResult(total_runs=len(results))
 
-
-# ---------------------------------------------------------------------------
-# Registry
-# ---------------------------------------------------------------------------
 
 EXPERIMENT_REGISTRY: dict[str, type[ExperimentSpec]] = {
     "noop": NoopSpec,  # type: ignore[dict-item]

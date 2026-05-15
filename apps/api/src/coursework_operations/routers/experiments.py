@@ -1,7 +1,4 @@
-"""
-Thin wrappers: validate spec-specific input, start ExperimentWorkflow.
-One router, four routes. All return {workflow_id}.
-"""
+"""Thin wrappers: validate spec-specific input, start ExperimentWorkflow."""
 import uuid
 from datetime import timedelta
 
@@ -10,13 +7,13 @@ from redis.asyncio import Redis
 from temporalio.client import Client
 
 from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from src.experiments.experiment1 import Experiment1Input
-from src.experiments.experiment2 import Experiment2Input
-from src.experiments.experiment3 import Experiment3Input
-from src.experiments.experiment4 import Experiment4Input
-from src.worker.config import TASK_QUEUE
-from src.worker.types import ExperimentInput
-from src.worker.workflows.experiment import ExperimentWorkflow
+from experiments.experiment1 import Experiment1Input
+from experiments.experiment2 import Experiment2Input
+from experiments.experiment3 import Experiment3Input
+from experiments.experiment4 import Experiment4Input
+from worker.config import TASK_QUEUE
+from worker.types import ExperimentInput
+from worker.workflows.experiment import ExperimentWorkflow
 
 router = APIRouter()
 
