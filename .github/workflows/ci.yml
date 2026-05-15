@@ -1,0 +1,217 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# On push to main cd.yml also runs; CI here is just tests+lint+build-check.
+# CD (image push + write-back) is in cd.yml.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true   # safe to cancel CI mid-run on new push
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # 1. Detect which components changed
+  # ──────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend:  ${{ steps.filter.outputs.backend }}
+      worker:   ${{ steps.filter.outputs.worker }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # needed for accurate diff on PRs
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'apps/ui/**'
+            backend:
+              - 'apps/api/**'
+              - 'libs/operations/**'
+              - 'apps/worker/**'
+            worker:
+              - 'apps/worker/**'
+              - 'libs/operations/**'
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. Tests & lint (matrix across changed components)
+  # ──────────────────────────────────────────────────────────────────────────
+  test:
+    name: Test / ${{ matrix.component }}
+    needs: changes
+    if: |
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.backend  == 'true' ||
+      needs.changes.outputs.worker   == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            changed: ${{ needs.changes.outputs.frontend }}
+          - component: backend
+            changed: ${{ needs.changes.outputs.backend }}
+          - component: worker
+            changed: ${{ needs.changes.outputs.worker }}
+    steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Component ${{ matrix.component }} unchanged — skipping."
+
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      # ── Frontend ──────────────────────────────────────────────────────────
+      - name: Setup Node
+        if: matrix.changed == 'true' && matrix.component == 'frontend'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/ui/package-lock.json
+
+      - name: Install frontend deps
+        if: matrix.changed == 'true' && matrix.component == 'frontend'
+        run: npm ci
+        working-directory: apps/ui
+
+      - name: Frontend — ESLint
+        if: matrix.changed == 'true' && matrix.component == 'frontend'
+        run: npm run lint
+        working-directory: apps/ui
+
+      - name: Frontend — TypeScript check
+        if: matrix.changed == 'true' && matrix.component == 'frontend'
+        run: npx tsc --noEmit
+        working-directory: apps/ui
+
+      # ── Backend ───────────────────────────────────────────────────────────
+      - name: Setup Python
+        if: matrix.changed == 'true' && matrix.component == 'backend'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        if: matrix.changed == 'true' && matrix.component == 'backend'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Cache uv
+        if: matrix.changed == 'true' && matrix.component == 'backend'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install backend deps
+        if: matrix.changed == 'true' && matrix.component == 'backend'
+        run: uv sync --frozen
+        working-directory: apps/api
+
+      - name: Install worker package
+        if: matrix.changed == 'true' && matrix.component == 'backend'
+        run: uv run pip install ../worker --no-deps
+        working-directory: apps/api
+
+      - name: Backend — pytest
+        if: matrix.changed == 'true' && matrix.component == 'backend'
+        run: uv run pytest tests/ -q
+        working-directory: apps/api
+
+      # ── Worker ────────────────────────────────────────────────────────────
+      - name: Setup Python (worker)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv (worker)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Cache uv (worker)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+
+      - name: Install backend deps (for worker tests)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        run: uv sync --frozen
+        working-directory: apps/api
+
+      - name: Install worker package (worker)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        run: uv run pip install ../worker --no-deps
+        working-directory: apps/api
+
+      - name: Worker — pytest (shared test suite)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        run: uv run pytest tests/ -q
+        working-directory: apps/api
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 3. Build-check (PR only — verify Dockerfile builds, no push)
+  # ──────────────────────────────────────────────────────────────────────────
+  build-check:
+    name: Build-check / ${{ matrix.component }}
+    needs: [changes, test]
+    if: |
+      github.event_name == 'pull_request' && (
+        needs.changes.outputs.frontend == 'true' ||
+        needs.changes.outputs.backend  == 'true' ||
+        needs.changes.outputs.worker   == 'true'
+      )
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            changed:    ${{ needs.changes.outputs.frontend }}
+            dockerfile: apps/ui/Dockerfile
+            context:    apps/ui
+          - component: backend
+            changed:    ${{ needs.changes.outputs.backend }}
+            dockerfile: apps/api/Dockerfile
+            context:    .
+          - component: worker
+            changed:    ${{ needs.changes.outputs.worker }}
+            dockerfile: apps/worker/Dockerfile
+            context:    .
+    steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Component ${{ matrix.component }} unchanged — skipping."
+
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      - name: Set up Docker Buildx
+        if: matrix.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        if: matrix.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context:    ${{ matrix.context }}
+          file:       ${{ matrix.dockerfile }}
+          push:       false
+          platforms:  linux/amd64
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to:   type=gha,scope=${{ matrix.component }},mode=max
+          tags:       diploma-${{ matrix.component }}:ci-check
