@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: coursework-operations
+spec:
+  # HPA controls replicas — do not set here to avoid conflicts.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/part-of: coursework-operations
+    spec:
+      containers:
+        - name: worker
+          # Replace with your actual registry and tag before deploying.
+          image: <REGISTRY>/coursework-operations:latest
+          imagePullPolicy: Always
+          command: ["python", "-m", "src.worker.main"]
+          envFrom:
+            - configMapRef:
+                name: coursework-config
+          resources:
+            requests:
+              # Each worker runs Rayon-parallel solvers that saturate available cores.
+              # Request enough CPU to avoid throttling during active runs.
+              cpu: "1000m"
+              memory: "512Mi"
+            limits:
+              # Allow bursting to multiple cores for Rayon parallelism.
+              # Tune based on node size and desired concurrency.
+              cpu: "4000m"
+              memory: "2Gi"
+          # No HTTP endpoint on the worker — liveness is implicit via Temporal heartbeat.
+          # If the process dies, k8s restarts it; Temporal retries pending activities.
