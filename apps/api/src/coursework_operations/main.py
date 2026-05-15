@@ -38,9 +38,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(solve.router)
-app.include_router(experiments.router)
-app.include_router(jobs.router)
+app.include_router(solve.router, prefix="/api")
+app.include_router(experiments.router, prefix="/api")
+app.include_router(jobs.router, prefix="/api")
 
 
 if __name__ == "__main__":
