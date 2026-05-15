@@ -6,6 +6,7 @@ from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 
 from src.coursework_operations.routers import jobs, solve
+from src.coursework_operations.routers import experiments
 from src.worker.config import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 
 # ---------------------------------------------------------------------------
@@ -46,6 +47,7 @@ app = FastAPI(lifespan=lifespan)
 # New Temporal-backed routes
 # ---------------------------------------------------------------------------
 app.include_router(solve.router)
+app.include_router(experiments.router)
 app.include_router(jobs.router)
 
 # ---------------------------------------------------------------------------

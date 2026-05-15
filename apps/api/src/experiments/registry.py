@@ -1,13 +1,15 @@
 from pydantic import BaseModel
 
 from src.experiments.base import ExperimentSpec
+from src.experiments.experiment1 import Experiment1Spec
+from src.experiments.experiment2 import Experiment2Spec
+from src.experiments.experiment3 import Experiment3Spec
+from src.experiments.experiment4 import Experiment4Spec
 from src.worker.types import ProbabilisticParams, RunAlgorithmInput, RunResult
 
 
 # ---------------------------------------------------------------------------
-# "noop" spec — used for integration testing in step 5.
-# Returns count stub runs (probabilistic, tiny task), aggregate counts runs.
-# Remove or keep alongside real specs after step 6 validation.
+# "noop" spec — integration test fixture (step 5); kept for tests.
 # ---------------------------------------------------------------------------
 
 class _NoopInput(BaseModel):
@@ -53,9 +55,13 @@ class NoopSpec:
 
 
 # ---------------------------------------------------------------------------
-# Registry — populated here; step 6 adds Experiment1..4 specs.
+# Registry
 # ---------------------------------------------------------------------------
 
 EXPERIMENT_REGISTRY: dict[str, type[ExperimentSpec]] = {
     "noop": NoopSpec,  # type: ignore[dict-item]
+    "experiment1": Experiment1Spec,  # type: ignore[dict-item]
+    "experiment2": Experiment2Spec,  # type: ignore[dict-item]
+    "experiment3": Experiment3Spec,  # type: ignore[dict-item]
+    "experiment4": Experiment4Spec,  # type: ignore[dict-item]
 }
