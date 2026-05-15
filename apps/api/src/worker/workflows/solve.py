@@ -61,7 +61,14 @@ class SolveWorkflow:
             self._state["probabilistic"] = "done"
             return result
 
-        ant_result, prob_result = await asyncio.gather(run_ant(), run_prob())
+        try:
+            ant_result, prob_result = await asyncio.gather(run_ant(), run_prob())
+        except asyncio.CancelledError:
+            # Mark any still-running algorithms as cancelled for the query.
+            for key in ("ant_colony", "probabilistic"):
+                if self._state.get(key) == "running":
+                    self._state[key] = "cancelled"
+            raise
 
         return SolveResult(
             ant_colony=AlgorithmResult(

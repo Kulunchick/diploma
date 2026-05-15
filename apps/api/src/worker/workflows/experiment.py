@@ -61,9 +61,13 @@ class ExperimentWorkflow:
             self._partial_results.append(result)
             return result
 
-        results: list[RunResult] = list(
-            await asyncio.gather(*[run_one(r) for r in runs])
-        )
+        try:
+            results: list[RunResult] = list(
+                await asyncio.gather(*[run_one(r) for r in runs])
+            )
+        except asyncio.CancelledError:
+            # Partial progress is visible via the progress() and partial_results() queries.
+            raise
 
         # 3. Aggregate — pure function, safe to call in workflow code.
         spec = EXPERIMENT_REGISTRY[input.experiment_type]

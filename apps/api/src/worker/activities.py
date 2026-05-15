@@ -34,11 +34,14 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
     """
     Atomic unit: one run of one algorithm on one task.
 
-    - Runs the Rust solver in a thread-pool executor (blocking call).
-    - Heartbeats Temporal every 10 s via a background task for liveness.
-    - If input.redis_channel is set, also heartbeats and publishes per-iteration
-      events to Redis (used by /solve for real-time streaming).
-    - The Rust callback fires from a foreign thread → asyncio.run_coroutine_threadsafe.
+    Cancellation:
+    - Uses asyncio.wait(FIRST_COMPLETED) to race the executor against the heartbeat
+      monitor so that a Temporal cancellation request is detected promptly.
+    - When cancellation is detected, the executor future is cancelled.  The Rust
+      thread continues to completion in the background (no cancel token yet —
+      TODO: propagate via Rust binding when available).
+    - Iteration callbacks (redis_channel) fire from a foreign Rust thread →
+      asyncio.run_coroutine_threadsafe for both heartbeat and redis.publish.
     """
     loop = asyncio.get_running_loop()
 
@@ -73,9 +76,7 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
         algo = input.algorithm
 
         def iteration_callback(data: dict) -> None:
-            # Heartbeat Temporal for liveness on each iteration.
             asyncio.run_coroutine_threadsafe(_async_heartbeat(data), loop)
-            # Publish iteration event to Redis for WS clients.
             if redis:
                 asyncio.run_coroutine_threadsafe(
                     redis.publish(
@@ -87,13 +88,40 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
 
         solver.set_iteration_callback(iteration_callback)
 
-    # Background heartbeat for experiments (no iteration callback) and as a
-    # fallback for /solve between iterations.
+    start = time.perf_counter()
+    executor_task = asyncio.ensure_future(
+        loop.run_in_executor(None, solver.solve, rust_task)
+    )
+    # Background monitor: heartbeats every 10 s; raises if activity is cancelled.
     heartbeat_task = asyncio.create_task(_periodic_heartbeat())
+
     try:
-        start = time.perf_counter()
-        solution, value = await loop.run_in_executor(None, solver.solve, rust_task)
-        elapsed = time.perf_counter() - start
+        # Race solver vs heartbeat monitor.  FIRST_COMPLETED returns as soon as
+        # either finishes — normal solve completion or cancellation signal.
+        done, _ = await asyncio.wait(
+            {executor_task, heartbeat_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if executor_task in done:
+            # Normal path: solve finished before any cancellation.
+            solution, value = executor_task.result()
+            elapsed = time.perf_counter() - start
+        else:
+            # Heartbeat task finished first → cancellation or unexpected error.
+            exc = (
+                heartbeat_task.exception()
+                if not heartbeat_task.cancelled()
+                else asyncio.CancelledError()
+            )
+            executor_task.cancel()
+            await asyncio.gather(executor_task, return_exceptions=True)
+            raise exc  # type: ignore[misc]
+
+    except asyncio.CancelledError:
+        executor_task.cancel()
+        await asyncio.gather(executor_task, return_exceptions=True)
+        raise
     finally:
         heartbeat_task.cancel()
         await asyncio.gather(heartbeat_task, return_exceptions=True)
@@ -132,7 +160,12 @@ async def _async_heartbeat(data: dict) -> None:
 
 
 async def _periodic_heartbeat() -> None:
-    """Sends a Temporal heartbeat every 10 s during long solver runs."""
+    """
+    Heartbeats Temporal every 10 s for liveness.
+    activity.heartbeat() raises temporalio.exceptions.CancelledError when the
+    activity has been cancelled — this causes the task to finish with an exception,
+    which asyncio.wait(FIRST_COMPLETED) detects promptly.
+    """
     while True:
         await asyncio.sleep(10)
         activity.heartbeat({"status": "running"})
