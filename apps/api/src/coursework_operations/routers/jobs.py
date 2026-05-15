@@ -22,9 +22,12 @@ router = APIRouter(prefix="/jobs")
 async def jobs_events(
     websocket: WebSocket,
     workflow_id: str,
-    client: Client = Depends(get_temporal_client),
-    redis: Redis = Depends(get_redis),
 ):
+    # FastAPI does not inject Request-based Depends into WebSocket handlers;
+    # access app.state directly instead.
+    client: Client = websocket.app.state.temporal
+    redis: Redis = websocket.app.state.redis
+
     await websocket.accept()
     try:
         workflow_type = await redis.get(f"workflow_type:{workflow_id}")
