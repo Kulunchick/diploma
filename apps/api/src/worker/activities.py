@@ -113,11 +113,17 @@ async def generate_experiment_runs_activity(
 ) -> list[RunAlgorithmInput]:
     """
     Generates the full list of RunAlgorithmInput for an experiment.
-    Uses the spec from EXPERIMENT_REGISTRY to call generate_runs.
     Runs as an activity (not in workflow) because TaskGenerator uses random.
-    Implemented in step 5.
+    Looks up the spec in EXPERIMENT_REGISTRY and delegates to spec.generate_runs().
     """
-    raise NotImplementedError
+    from src.experiments.registry import EXPERIMENT_REGISTRY
+
+    spec = EXPERIMENT_REGISTRY.get(input.experiment_type)
+    if spec is None:
+        raise ValueError(f"Unknown experiment type: {input.experiment_type!r}")
+
+    validated_input = spec.input_model.model_validate(input.params)
+    return spec.generate_runs(validated_input)
 
 
 async def _async_heartbeat(data: dict) -> None:

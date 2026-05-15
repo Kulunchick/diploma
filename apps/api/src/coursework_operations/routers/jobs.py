@@ -7,7 +7,8 @@ from temporalio.client import Client, WorkflowExecutionStatus
 from temporalio.service import RPCError
 
 from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from src.worker.types import SolveResult
+from src.worker.types import ExperimentResult, SolveResult
+from src.worker.workflows.experiment import ExperimentWorkflow
 from src.worker.workflows.solve import SolveWorkflow
 
 router = APIRouter(prefix="/jobs")
@@ -104,16 +105,47 @@ async def _solve_adapter(websocket: WebSocket, handle, redis: Redis, workflow_id
 
 async def _experiment_adapter(websocket: WebSocket, handle, redis: Redis, workflow_id: str):
     """
-    Universal experiment events — implemented in step 5.
-    For now returns a progress stub so the WS doesn't hang.
+    New unified experiment event format:
+      {type:"started"}
+      {type:"progress", completed:N, total:M}   — polled every 2 s
+      {type:"complete", data:{...}}              — spec.aggregate() result
+      {type:"error", message}
     """
+    typed_handle = redis  # keep for future run_completed Redis events (step 6+)
+
     await websocket.send_json({"type": "started"})
+
+    async def poll_progress() -> None:
+        try:
+            while True:
+                await asyncio.sleep(2)
+                try:
+                    prog = await handle.query(ExperimentWorkflow.progress)
+                    await websocket.send_json({"type": "progress", **prog})
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            pass
+
+    progress_task = asyncio.create_task(poll_progress())
     try:
-        raw = await handle.result()
-        data = raw.model_dump() if hasattr(raw, "model_dump") else raw
-        await websocket.send_json({"type": "complete", "data": data})
-    except Exception as e:
-        await websocket.send_json({"type": "error", "message": str(e)})
+        result: ExperimentResult = await handle.result(result_type=ExperimentResult)
+
+        progress_task.cancel()
+        await asyncio.gather(progress_task, return_exceptions=True)
+
+        # Send final progress so frontend sees 100 %.
+        try:
+            prog = await handle.query(ExperimentWorkflow.progress)
+            await websocket.send_json({"type": "progress", **prog})
+        except Exception:
+            pass
+
+        await websocket.send_json({"type": "complete", "data": result.data})
+    except Exception:
+        progress_task.cancel()
+        await asyncio.gather(progress_task, return_exceptions=True)
+        raise
 
 
 # ---------------------------------------------------------------------------
