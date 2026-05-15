@@ -66,8 +66,8 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     container_name: dev-api
     depends_on:
       temporal:
@@ -86,8 +86,8 @@ services:
 
   worker:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
     container_name: dev-worker
     depends_on:
       temporal:
