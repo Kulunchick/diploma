@@ -163,12 +163,6 @@ jobs:
             changed:    ${{ needs.changes.outputs.worker }}
             dockerfile: apps/worker/Dockerfile
             context:    .
-    outputs:
-      # Forward tags to write-back job (step 4 will consume these)
-      frontend-tag: ${{ steps.tag.outputs.frontend }}
-      backend-tag:  ${{ steps.tag.outputs.backend }}
-      worker-tag:   ${{ steps.tag.outputs.worker }}
-
     steps:
       - name: Skip if unchanged
         if: matrix.changed != 'true'
@@ -200,11 +194,6 @@ jobs:
           echo "tag=${TAG}"            >> $GITHUB_OUTPUT
           echo "full=${IMAGE}:${TAG}"  >> $GITHUB_OUTPUT
 
-      - name: Set tag output (forwarded to write-back)
-        if: matrix.changed == 'true'
-        id: tag
-        run: echo "${{ matrix.component }}=${{ steps.img.outputs.tag }}" >> $GITHUB_OUTPUT
-
       - name: Build and push
         if: matrix.changed == 'true'
         uses: docker/build-push-action@v6
@@ -230,3 +219,100 @@ jobs:
           echo "| Image | \`${{ steps.img.outputs.full }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | ${{ github.event.head_commit.message }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 4. Write-back: update image.tag in Helm values.yaml for changed charts,
+  #    commit [skip ci], rebase-pull, push.
+  #
+  #    Runs in the same concurrency group 'cd' (cancel-in-progress: false),
+  #    so only one write-back executes at a time → no parallel git conflicts.
+  #
+  #    Why no conflict even without rebase in the normal case:
+  #      The CD group serialises runs. If a second push queued while build
+  #      was running, it starts after the first write-back lands, so it
+  #      picks up the already-bumped values.yaml. The rebase is a safety net
+  #      for the rare manual push that slips through during the build phase.
+  #
+  #    Branch protection TODO: see DEPLOY.md — if main is protected,
+  #    GITHUB_TOKEN push may be rejected. Choose option A or B from that doc.
+  # ──────────────────────────────────────────────────────────────────────────
+  writeback:
+    name: Write-back image tags
+    needs: [changes, build-push]
+    if: |
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.backend  == 'true' ||
+      needs.changes.outputs.worker   == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Pushes made with GITHUB_TOKEN do NOT re-trigger workflows.
+          # [skip ci] in the commit message is an additional safety belt.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so rebase has enough context.
+          fetch-depth: 0
+
+      - name: Compute immutable SHA tag
+        id: sha
+        run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      # Update image.tag in each changed chart's values.yaml.
+      # sed targets the line "  tag: <anything>" (2-space indent under image:).
+      # The values.yaml structure is controlled — only one such line per file.
+      - name: Bump frontend image.tag
+        if: needs.changes.outputs.frontend == 'true'
+        run: |
+          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+            deploy/charts/frontend/values.yaml
+
+      - name: Bump backend image.tag
+        if: needs.changes.outputs.backend == 'true'
+        run: |
+          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+            deploy/charts/backend/values.yaml
+
+      - name: Bump worker image.tag
+        if: needs.changes.outputs.worker == 'true'
+        run: |
+          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+            deploy/charts/worker/values.yaml
+
+      - name: Commit → rebase → push [skip ci]
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add deploy/charts/frontend/values.yaml \
+                  deploy/charts/backend/values.yaml  \
+                  deploy/charts/worker/values.yaml
+
+          # Nothing to commit if all components were unchanged (shouldn't
+          # happen given the job's if-condition, but guard anyway).
+          if git diff --cached --quiet; then
+            echo "No values.yaml changes — nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(cd): bump image tags to ${{ steps.sha.outputs.tag }} [skip ci]"
+
+          # Rebase our commit on top of any new remote commits that arrived
+          # during the build phase (manual push, hotfix, etc.).
+          git pull --rebase origin main
+
+          git push origin main
+
+      - name: Write-back summary
+        run: |
+          SHA="${{ steps.sha.outputs.tag }}"
+          echo "### 🏷️ Values.yaml bumped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: \`${SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Chart | Changed |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| frontend | ${{ needs.changes.outputs.frontend }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| backend  | ${{ needs.changes.outputs.backend }} |"  >> $GITHUB_STEP_SUMMARY
+          echo "| worker   | ${{ needs.changes.outputs.worker }} |"   >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Argo CD will auto-sync within seconds." >> $GITHUB_STEP_SUMMARY
