@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "worker.fullname" . }}-config
+  labels:
+    {{- include "worker.labels" . | nindent 4 }}
+data:
+  TEMPORAL_HOST: {{ .Values.config.temporalHost | quote }}
+  TEMPORAL_NAMESPACE: {{ .Values.config.temporalNamespace | quote }}
+  TASK_QUEUE: {{ .Values.config.taskQueue | quote }}
+  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+  PYTHONUNBUFFERED: "1"

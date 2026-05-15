@@ -1,0 +1,33 @@
+image:
+  repository: ghcr.io/kulunchick/diploma-frontend
+  # tag is set by CI write-back on every deploy (git SHA)
+  tag: placeholder
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+# Runtime config injected into /config.js at pod start (via initContainer)
+config:
+  apiBaseUrl: "/api"
+  useTemporalApi: "true"
+
+resources:
+  requests:
+    cpu: "10m"
+    memory: "32Mi"
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+
+ingress:
+  host: "TODO_YOUR_DOMAIN"
+  clusterIssuer: "letsencrypt-prod"
+  tlsSecretName: "coursework-tls"
+  # WS timeout for /api/jobs/{id}/events long-poll connections
+  proxyReadTimeout: "3600"
+  proxySendTimeout: "3600"
+
+# Set to existing secret name if ghcr packages are private
+imagePullSecrets: []
+# imagePullSecrets:
+#   - name: ghcr-pull-secret

@@ -1,0 +1,30 @@
+image:
+  repository: ghcr.io/kulunchick/diploma-worker
+  # tag is set by CI write-back on every deploy (git SHA)
+  tag: placeholder
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+config:
+  temporalHost: "temporal-frontend.temporal.svc.cluster.local:7233"
+  temporalNamespace: "default"
+  taskQueue: "coursework-operations"
+  redisUrl: "redis://redis-master.redis.svc.cluster.local:6379"
+
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "512Mi"
+  limits:
+    cpu: "4000m"
+    memory: "2Gi"
+
+hpa:
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+imagePullSecrets: []
+# imagePullSecrets:
+#   - name: ghcr-pull-secret

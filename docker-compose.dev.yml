@@ -87,7 +87,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/worker/Dockerfile
     container_name: dev-worker
     depends_on:
       temporal:

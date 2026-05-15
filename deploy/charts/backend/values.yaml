@@ -1,0 +1,27 @@
+image:
+  repository: ghcr.io/kulunchick/diploma-backend
+  # tag is set by CI write-back on every deploy (git SHA)
+  tag: placeholder
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+config:
+  temporalHost: "temporal-frontend.temporal.svc.cluster.local:7233"
+  temporalNamespace: "default"
+  taskQueue: "coursework-operations"
+  redisUrl: "redis://redis-master.redis.svc.cluster.local:6379"
+  # Allowed CORS origins for local dev; in prod same-origin via Ingress
+  corsOrigins: "https://TODO_YOUR_DOMAIN"
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+imagePullSecrets: []
+# imagePullSecrets:
+#   - name: ghcr-pull-secret
