@@ -101,3 +101,18 @@ services:
       TASK_QUEUE: coursework-operations
       REDIS_URL: redis://redis:6379
     command: ["python", "-m", "src.worker.main"]
+
+  ui:
+    build:
+      context: ./apps/ui
+      dockerfile: Dockerfile
+      args:
+        # VITE_* vars are baked into the JS bundle at build time by Vite.
+        # The browser connects to the API via localhost — not the container name.
+        VITE_WS_BASE_URL: ws://localhost:8000
+        VITE_USE_TEMPORAL_API: "true"
+    container_name: dev-ui
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
