@@ -1,33 +1,37 @@
-# Build stage
+# ============================================================
+# Stage 1: Build static assets
+# No build-time URL args — all config is injected at runtime
+# via docker-entrypoint.sh from env vars / ConfigMap.
+# ============================================================
 FROM node:20-alpine AS build
 
 WORKDIR /app
-
-# Копіюємо файли залежностей
 COPY package*.json ./
-
-# Встановлюємо залежності
 RUN npm ci
 
-# Копіюємо код застосунку
 COPY . .
-
-# Vite replaces import.meta.env.* at build time — pass vars as ARGs
-ARG VITE_WS_BASE_URL=ws://localhost:8000
-ENV VITE_WS_BASE_URL=$VITE_WS_BASE_URL
-
-# Будуємо застосунок
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# ============================================================
+# Stage 2: Serve with nginx (non-root, port 8080)
+# ============================================================
+FROM nginx:1.25-alpine
 
-# Копіюємо збудований застосунок з попереднього етапу
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy built assets, nginx config, and entrypoint
+COPY --from=build /app/dist      /usr/share/nginx/html
+COPY nginx.conf                  /etc/nginx/nginx.conf
+COPY docker-entrypoint.sh        /docker-entrypoint.sh
 
-# SPA routing: all unknown paths → index.html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Make entrypoint executable and give nginx user ownership of the html
+# directory so docker-entrypoint.sh can write config.js.
+# (In k8s with readOnlyRootFilesystem an emptyDir is used instead — see k8s/.)
+RUN chmod +x /docker-entrypoint.sh \
+ && chown -R nginx:nginx /usr/share/nginx/html
 
-EXPOSE 80
+# Run as nginx user (uid 101) — never root
+USER nginx
 
+EXPOSE 8080
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
