@@ -40,11 +40,21 @@ export const API_BASE_URL: string =
 
 // ---------------------------------------------------------------------------
 // WebSocket base URL
-// Prod: "wss://host/api" or "ws://host/api" (derived from window.location)
-// Dev:  "ws://localhost:8000/api"  (from VITE_WS_BASE_URL)
+// Prod (apiBaseUrl="/api"):                derived from window.location
+// Local k8s (apiBaseUrl="http://host/api"): swap scheme (http→ws / https→wss)
+// Vite dev (no cfg):                        VITE_WS_BASE_URL or localhost fallback
 // ---------------------------------------------------------------------------
+function deriveWsBase(apiBaseUrl: string): string {
+  // Absolute URL — split host from path so backend can live on a different port.
+  if (/^https?:\/\//.test(apiBaseUrl)) {
+    return apiBaseUrl.replace(/^http/, 'ws');
+  }
+  // Relative path — same-origin via Ingress proxy.
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${apiBaseUrl}`;
+}
+
 export const WS_BASE_URL: string = cfg?.apiBaseUrl
-  ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${cfg.apiBaseUrl}`
+  ? deriveWsBase(cfg.apiBaseUrl)
   : ((import.meta.env as ImportMetaEnv).VITE_WS_BASE_URL ??
       'ws://localhost:8000/api');
 
