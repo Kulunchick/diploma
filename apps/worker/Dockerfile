@@ -32,11 +32,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install the worker package (worker + experiments) and all its deps.
+# Install shared lib and worker package together so uv resolves the
+# shared path dependency without hitting PyPI.
+COPY libs/shared/ /shared/
 COPY apps/worker/ /worker/
 RUN uv venv .venv
 ENV VIRTUAL_ENV=/app/.venv
-RUN uv pip install /worker/
+RUN uv pip install /shared/ /worker/
 
 # Override the PyPI assignment_solver with our local Rust build.
 COPY --from=rust-builder /src/target/wheels/ /wheels/

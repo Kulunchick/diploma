@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: coursework-config
+  name: config
   labels:
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
 data:
   TEMPORAL_HOST: "temporal-frontend.temporal.svc.cluster.local:7233"
   TEMPORAL_NAMESPACE: "default"
-  TASK_QUEUE: "coursework-operations"
+  TASK_QUEUE: "operations"
   REDIS_URL: "redis://redis-master.redis.svc.cluster.local:6379"

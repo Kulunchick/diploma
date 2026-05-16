@@ -22,7 +22,7 @@ spec:
         - name: backend
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["python", "-m", "src.coursework_operations.main"]
+          command: ["python", "-m", "src.operations.main"]
           ports:
             - name: http
               containerPort: 8000

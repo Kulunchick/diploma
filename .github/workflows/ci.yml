@@ -36,10 +36,12 @@ jobs:
               - 'apps/ui/**'
             backend:
               - 'apps/api/**'
+              - 'libs/shared/**'
               - 'libs/operations/**'
               - 'apps/worker/**'
             worker:
               - 'apps/worker/**'
+              - 'libs/shared/**'
               - 'libs/operations/**'
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -164,10 +166,10 @@ jobs:
       - name: Install worker package + local Rust wheel
         if: matrix.changed == 'true' && matrix.component == 'worker'
         run: |
-          pip install -e ".[dev]"
+          pip install libs/shared/
+          pip install -e "apps/worker/[dev]"
           pip install libs/operations/target/wheels/assignment_solver-*.whl \
               --force-reinstall --no-deps
-        working-directory: apps/worker
 
       - name: Worker — pytest
         if: matrix.changed == 'true' && matrix.component == 'worker'

@@ -1,18 +1,15 @@
 from typing import Optional
 from pydantic import BaseModel
 
-
-class AntColonyParams(BaseModel):
-    num_ants: int = 20
-    kmax: int = 100
-    alpha: float = 1.0
-    beta: float = 2.0
-    rho: float = 0.1
-    initial_pheromone: float = 1.0
-
-
-class ProbabilisticParams(BaseModel):
-    kmax: int = 100
+from shared.types import (  # noqa: F401 — re-exported for worker modules
+    AntColonyParams,
+    AlgorithmResult,
+    ExperimentInput,
+    ExperimentResult,
+    ProbabilisticParams,
+    SolveInput,
+    SolveResult,
+)
 
 
 class RunAlgorithmInput(BaseModel):
@@ -40,35 +37,3 @@ class RunResult(BaseModel):
 class GenerateRunsInput(BaseModel):
     experiment_type: str
     params: dict
-
-
-class AlgorithmResult(BaseModel):
-    solution: list[list[int]]
-    value: float
-
-
-class SolveInput(BaseModel):
-    m: int
-    n: int
-    c: list[list[int]]
-    b_ij: list[list[int]]
-    b_total: int
-    omega: list[list[float]]
-    ant_colony: AntColonyParams = AntColonyParams()
-    probabilistic: ProbabilisticParams = ProbabilisticParams()
-    redis_channel: str
-
-
-class SolveResult(BaseModel):
-    ant_colony: AlgorithmResult
-    probabilistic: AlgorithmResult
-
-
-class ExperimentInput(BaseModel):
-    experiment_type: str
-    params: dict
-    concurrency: int = 1
-
-
-class ExperimentResult(BaseModel):
-    data: dict

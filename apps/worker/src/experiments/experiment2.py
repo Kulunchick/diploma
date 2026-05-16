@@ -1,30 +1,8 @@
 """Experiment 2: vary beta."""
-from typing import List
-
-from pydantic import BaseModel
-
-from experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
+from experiments.base import ExperimentStatsResult, aggregate_to_stats
 from experiments.task_generator import TaskGenerator
-from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
-
-
-class BetaVariant(BaseModel):
-    beta: float
-
-
-class Experiment2Input(BaseModel):
-    count: int
-    betaVariants: List[BetaVariant]
-    p: float
-    tau: float
-    alpha: float
-    antKmax: int
-    m: int
-    n: int
-    l: int
-    cRange: Range
-    bRange: Range
-    omegaRange: Range
+from shared.types import AntColonyParams, BetaVariant, Experiment2Input, ProbabilisticParams
+from worker.types import RunAlgorithmInput, RunResult
 
 
 class Experiment2Spec:

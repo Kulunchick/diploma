@@ -1,5 +1,5 @@
 [project]
-name = "coursework-operations"
+name = "operations"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
@@ -14,6 +14,7 @@ dependencies = [
     "cffi>=1.17.1",
     "temporalio>=1.7.0",
     "redis>=5.0.0",
+    "shared",
 ]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,11 +26,14 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = false
 
+[tool.uv.sources]
+shared = { path = "../../libs/shared" }
+
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/coursework_operations"]
+packages = ["src/operations"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

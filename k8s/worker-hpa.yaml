@@ -4,7 +4,7 @@ metadata:
   name: worker-hpa
   labels:
     app.kubernetes.io/name: worker
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

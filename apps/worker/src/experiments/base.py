@@ -3,12 +3,8 @@ from typing import Protocol
 
 from pydantic import BaseModel, RootModel
 
+from shared.types import Range  # noqa: F401 — re-exported for experiment modules
 from worker.types import RunAlgorithmInput, RunResult
-
-
-class Range(BaseModel):
-    min: float
-    max: float
 
 
 class AlgoStats(BaseModel):

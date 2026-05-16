@@ -2,7 +2,7 @@ from typing import List
 
 from pydantic import BaseModel
 
-from src.coursework_operations.models.algorithm_parametrs import AlgorithmParameters
+from src.operations.models.algorithm_parametrs import AlgorithmParameters
 
 
 class TaskRequest(BaseModel):

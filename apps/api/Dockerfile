@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
+COPY libs/shared/ /libs/shared/
 COPY apps/api/pyproject.toml apps/api/uv.lock ./
 RUN uv sync --frozen --no-dev
 
@@ -51,4 +52,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY apps/api/src src
 
-CMD ["python", "-m", "src.coursework_operations.main"]
+CMD ["python", "-m", "src.operations.main"]

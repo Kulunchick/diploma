@@ -22,7 +22,7 @@ resources:
 ingress:
   host: "TODO_YOUR_DOMAIN"
   clusterIssuer: "letsencrypt-prod"
-  tlsSecretName: "coursework-tls"
+  tlsSecretName: "tls"
   # WS timeout for /api/jobs/{id}/events long-poll connections
   proxyReadTimeout: "3600"
   proxySendTimeout: "3600"

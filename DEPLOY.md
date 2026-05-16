@@ -50,8 +50,8 @@ before applying the Ingress (cert-manager needs HTTP-01 challenge to succeed).
    |---|---|
    | `k8s/frontend-ingress.yaml` | Replace `TODO_YOUR_DOMAIN` with your domain (2 places) |
    | `k8s/cluster-issuer.yaml` | Replace `TODO_YOUR_EMAIL` with your email |
-   | `k8s/frontend-deployment.yaml` | Replace `<REGISTRY>/coursework-ui:latest` with your image (2 places: initContainer + main container) |
-   | `k8s/api-deployment.yaml` | Replace `<REGISTRY>/coursework-operations:latest` |
+   | `k8s/frontend-deployment.yaml` | Replace `<REGISTRY>/ui:latest` with your image (2 places: initContainer + main container) |
+   | `k8s/api-deployment.yaml` | Replace `<REGISTRY>/operations:latest` |
    | `k8s/worker-deployment.yaml` | Same |
    | `deploy/charts/*/values.yaml` | Replace `TODO_YOUR_DOMAIN` in frontend chart ingress section |
 
@@ -59,12 +59,12 @@ before applying the Ingress (cert-manager needs HTTP-01 challenge to succeed).
 
    ```bash
    # Frontend (one image for all envs — no build-time URL args)
-   docker build -t <REGISTRY>/coursework-ui:latest apps/ui/
-   docker push <REGISTRY>/coursework-ui:latest
+   docker build -t <REGISTRY>/ui:latest apps/ui/
+   docker push <REGISTRY>/ui:latest
 
    # Backend / worker (same image, different CMD)
-   docker build -t <REGISTRY>/coursework-operations:latest apps/api/
-   docker push <REGISTRY>/coursework-operations:latest
+   docker build -t <REGISTRY>/operations:latest apps/api/
+   docker push <REGISTRY>/operations:latest
    ```
 
 ---
@@ -103,10 +103,10 @@ kubectl get pods
 
 # Certificate issued (may take 1–2 min on first deploy)
 kubectl get certificate
-kubectl describe certificate coursework-tls
+kubectl describe certificate tls
 
 # Ingress has an address
-kubectl get ingress coursework-ingress
+kubectl get ingress ingress
 
 # Smoke test
 curl -si https://YOUR_DOMAIN/

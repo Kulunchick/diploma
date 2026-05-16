@@ -78,11 +78,11 @@ services:
       PYTHONUNBUFFERED: "1"
       TEMPORAL_HOST: temporal:7233
       TEMPORAL_NAMESPACE: default
-      TASK_QUEUE: coursework-operations
+      TASK_QUEUE: operations
       REDIS_URL: redis://redis:6379
     ports:
       - "8000:8000"
-    command: ["python", "-m", "src.coursework_operations.main"]
+    command: ["python", "-m", "src.operations.main"]
 
   worker:
     build:
@@ -98,7 +98,7 @@ services:
       PYTHONUNBUFFERED: "1"
       TEMPORAL_HOST: temporal:7233
       TEMPORAL_NAMESPACE: default
-      TASK_QUEUE: coursework-operations
+      TASK_QUEUE: operations
       REDIS_URL: redis://redis:6379
     command: ["python", "-m", "worker.main"]
 

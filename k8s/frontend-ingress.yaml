@@ -1,9 +1,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: coursework-ingress
+  name: ingress
   labels:
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
   annotations:
     # ingress-nginx controller (kubernetes/ingress-nginx)
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -21,7 +21,7 @@ spec:
     - hosts:
         # TODO: replace with your actual domain
         - "TODO_YOUR_DOMAIN"
-      secretName: coursework-tls
+      secretName: tls
 
   rules:
     # TODO: replace with your actual domain

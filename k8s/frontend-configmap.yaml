@@ -4,7 +4,7 @@ metadata:
   name: frontend-config
   labels:
     app.kubernetes.io/name: frontend
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
 data:
   # HTTP base path for all API calls.  Ingress routes /api/* to the backend.
   APP_API_BASE_URL: "/api"

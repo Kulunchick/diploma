@@ -9,7 +9,7 @@ replicaCount: 1
 config:
   temporalHost: "temporal-frontend.temporal.svc.cluster.local:7233"
   temporalNamespace: "default"
-  taskQueue: "coursework-operations"
+  taskQueue: "operations"
   redisUrl: "redis://redis-master.redis.svc.cluster.local:6379"
   # Allowed CORS origins for local dev; in prod same-origin via Ingress
   corsOrigins: "https://TODO_YOUR_DOMAIN"

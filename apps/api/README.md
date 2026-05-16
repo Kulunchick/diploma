@@ -1,4 +1,4 @@
-# coursework-operations
+# operations
 
 FastAPI + Temporal + Rust solvers (assignment_solver).
 
@@ -39,7 +39,7 @@ pip install temporalio "redis>=5.0.0"
 
 ```bash
 cd apps/api
-python -m src.coursework_operations.main
+python -m src.operations.main
 ```
 
 ### Run Temporal worker
@@ -96,8 +96,8 @@ helm install redis bitnami/redis \
 
 ```bash
 # from apps/api/
-docker build -t <REGISTRY>/coursework-operations:latest .
-docker push <REGISTRY>/coursework-operations:latest
+docker build -t <REGISTRY>/operations:latest .
+docker push <REGISTRY>/operations:latest
 ```
 
 Update the `image:` field in `k8s/api-deployment.yaml` and

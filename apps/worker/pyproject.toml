@@ -1,7 +1,7 @@
 [project]
-name = "coursework-worker"
+name = "worker"
 version = "0.1.0"
-description = "Temporal worker and experiment specs for coursework-operations"
+description = "Temporal worker and experiment specs"
 authors = [
     { name = "Kulunchick", email = "nikolikrasovski@gmail.com" }
 ]
@@ -11,6 +11,7 @@ dependencies = [
     "temporalio>=1.7.0",
     "redis>=5.0.0",
     "pydantic>=2.11.4",
+    "shared",
 ]
 requires-python = ">=3.12"
 
@@ -19,6 +20,9 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+
+[tool.uv.sources]
+shared = { path = "../../libs/shared" }
 
 [build-system]
 requires = ["hatchling"]

@@ -6,8 +6,8 @@ from redis.asyncio import Redis
 from temporalio.client import Client, WorkflowExecutionStatus
 from temporalio.service import RPCError
 
-from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from src.coursework_operations.temporal_types import ExperimentResult, SolveResult
+from src.operations.routers.deps import get_redis, get_temporal_client
+from src.operations.temporal_types import ExperimentResult, SolveResult
 
 router = APIRouter(prefix="/jobs")
 

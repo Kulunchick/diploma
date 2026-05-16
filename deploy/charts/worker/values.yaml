@@ -9,7 +9,7 @@ replicaCount: 1
 config:
   temporalHost: "temporal-frontend.temporal.svc.cluster.local:7233"
   temporalNamespace: "default"
-  taskQueue: "coursework-operations"
+  taskQueue: "operations"
   redisUrl: "redis://redis-master.redis.svc.cluster.local:6379"
 
 resources:

@@ -1,29 +1,8 @@
 """Experiment 3: vary m×n size. alpha=1.0/beta=1.0 hardcoded."""
-from typing import List
-
-from pydantic import BaseModel
-
-from experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
+from experiments.base import ExperimentStatsResult, aggregate_to_stats
 from experiments.task_generator import TaskGenerator
-from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
-
-
-class MNVariant(BaseModel):
-    m: int
-    n: int
-
-
-class Experiment3Input(BaseModel):
-    count: int
-    mnVariants: List[MNVariant]
-    p: float
-    tau: float
-    antKmax: int
-    probKmax: int
-    l: int
-    cRange: Range
-    bRange: Range
-    omegaRange: Range
+from shared.types import AntColonyParams, Experiment3Input, MNVariant, ProbabilisticParams
+from worker.types import RunAlgorithmInput, RunResult
 
 
 class Experiment3Spec:

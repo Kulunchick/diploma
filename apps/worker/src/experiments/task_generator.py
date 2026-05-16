@@ -1,5 +1,5 @@
 """
-Task model and TaskGenerator, extracted from apps/api/src/coursework_operations/.
+Task model and TaskGenerator, extracted from apps/api/src/operations/.
 Used exclusively by experiment specs to generate random problem instances.
 """
 from typing import List

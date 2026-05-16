@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends
 from redis.asyncio import Redis
 from temporalio.client import Client
 
-from src.coursework_operations.models.task_request import TaskRequest
-from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from src.coursework_operations.temporal_types import (
+from src.operations.models.task_request import TaskRequest
+from src.operations.routers.deps import get_redis, get_temporal_client
+from src.operations.temporal_types import (
     AntColonyParams,
     ProbabilisticParams,
     SOLVE_WORKFLOW_NAME,

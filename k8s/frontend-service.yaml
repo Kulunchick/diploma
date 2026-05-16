@@ -4,7 +4,7 @@ metadata:
   name: frontend
   labels:
     app.kubernetes.io/name: frontend
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
 spec:
   selector:
     app.kubernetes.io/name: frontend

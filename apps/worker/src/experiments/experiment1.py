@@ -1,30 +1,8 @@
 """Experiment 1: vary kmax."""
-from typing import List
-
-from pydantic import BaseModel
-
-from experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
+from experiments.base import ExperimentStatsResult, aggregate_to_stats
 from experiments.task_generator import TaskGenerator
-from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
-
-
-class KmaxVariant(BaseModel):
-    kmax: int
-
-
-class Experiment1Input(BaseModel):
-    count: int
-    n: int
-    m: int
-    kmaxVariants: List[KmaxVariant]
-    l: int
-    p: float
-    tau: float
-    alpha: float
-    beta: float
-    cRange: Range
-    bRange: Range
-    omegaRange: Range
+from shared.types import AntColonyParams, Experiment1Input, KmaxVariant, ProbabilisticParams
+from worker.types import RunAlgorithmInput, RunResult
 
 
 class Experiment1Spec:

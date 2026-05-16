@@ -4,7 +4,7 @@ metadata:
   name: frontend
   labels:
     app.kubernetes.io/name: frontend
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
 spec:
   replicas: 2
   selector:
@@ -14,7 +14,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: frontend
-        app.kubernetes.io/part-of: coursework-operations
+        app.kubernetes.io/part-of: operations
     spec:
       # ----------------------------------------------------------------
       # initContainer: populate the emptyDir html-vol with static assets
@@ -29,7 +29,7 @@ spec:
       initContainers:
         - name: init-config
           # TODO: replace with your actual registry and tag
-          image: <REGISTRY>/coursework-ui:latest
+          image: <REGISTRY>/ui:latest
           imagePullPolicy: Always
           command: ["/bin/sh", "-c"]
           args:
@@ -55,7 +55,7 @@ spec:
       containers:
         - name: frontend
           # TODO: replace with your actual registry and tag
-          image: <REGISTRY>/coursework-ui:latest
+          image: <REGISTRY>/ui:latest
           imagePullPolicy: Always
           # Skip docker-entrypoint.sh — config.js already written by initContainer.
           command: ["nginx"]

@@ -2,29 +2,11 @@
 TODO(post-migration): omega shape (n, m) is wrong, should be (m, n).
 """
 import numpy as np
-from typing import List
 
-from pydantic import BaseModel
-
-from experiments.base import ExperimentStatsResult, Range, aggregate_to_stats
+from experiments.base import ExperimentStatsResult, aggregate_to_stats
 from experiments.task_generator import TaskGenerator
-from worker.types import AntColonyParams, ProbabilisticParams, RunAlgorithmInput, RunResult
-
-
-class Experiment4Input(BaseModel):
-    count: int
-    omegaRangeVariants: List[Range]
-    p: float
-    tau: float
-    alpha: float
-    beta: float
-    m: int
-    n: int
-    antKmax: int
-    probKmax: int
-    l: int
-    cRange: Range
-    bRange: Range
+from shared.types import AntColonyParams, Experiment4Input, ProbabilisticParams, Range
+from worker.types import RunAlgorithmInput, RunResult
 
 
 class Experiment4Spec:

@@ -4,7 +4,7 @@ metadata:
   name: worker
   labels:
     app.kubernetes.io/name: worker
-    app.kubernetes.io/part-of: coursework-operations
+    app.kubernetes.io/part-of: operations
 spec:
   # HPA controls replicas — do not set here to avoid conflicts.
   selector:
@@ -14,17 +14,17 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: worker
-        app.kubernetes.io/part-of: coursework-operations
+        app.kubernetes.io/part-of: operations
     spec:
       containers:
         - name: worker
           # Replace with your actual registry and tag before deploying.
-          image: <REGISTRY>/coursework-operations:latest
+          image: <REGISTRY>/operations:latest
           imagePullPolicy: Always
           command: ["python", "-m", "worker.main"]
           envFrom:
             - configMapRef:
-                name: coursework-config
+                name: config
           resources:
             requests:
               # Each worker runs Rayon-parallel solvers that saturate available cores.
