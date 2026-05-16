@@ -23,9 +23,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "frontend.fullname" . | replace "frontend" "backend" }}
+                name: {{ required "ingress.backend.serviceName is required" .Values.ingress.backend.serviceName | quote }}
                 port:
-                  number: 8000
+                  number: {{ .Values.ingress.backend.servicePort }}
           - path: /
             pathType: Prefix
             backend:

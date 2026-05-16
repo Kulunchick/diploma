@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-namespace-init
+  namespace: temporal
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: temporalio/admin-tools:1.31.0
+          command:
+            - sh
+            - -c
+            - |
+              until temporal operator namespace describe -n default \
+                --address temporal-frontend.temporal.svc.cluster.local:7233 \
+                >/dev/null 2>&1; do
+                temporal operator namespace create -n default \
+                  --address temporal-frontend.temporal.svc.cluster.local:7233 \
+                  2>&1 || true
+                sleep 5
+              done
+              echo "Temporal namespace 'default' is ready"

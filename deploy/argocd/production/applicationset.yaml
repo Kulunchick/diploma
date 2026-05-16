@@ -9,21 +9,36 @@ spec:
         elements:
           - chart: cluster-issuer
             namespace: cert-manager
+            syncWave: "-1"
           - chart: backend
             namespace: default
+            syncWave: "1"
           - chart: worker
             namespace: default
+            syncWave: "1"
           - chart: frontend
             namespace: default
+            syncWave: "1"
   template:
     metadata:
       name: "{{chart}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{syncWave}}"
     spec:
       project: default
-      source:
-        repoURL: https://github.com/Kulunchick/diploma
-        targetRevision: main
-        path: "deploy/charts/{{chart}}"
+      sources:
+        # Primary: the Helm chart
+        - repoURL: https://github.com/Kulunchick/diploma
+          targetRevision: main
+          path: "deploy/charts/{{chart}}"
+          helm:
+            # $values resolves to the root of the second source below
+            valueFiles:
+              - $values/deploy/values-production/{{chart}}.yaml
+        # Secondary: repo root used only as a values file source
+        - repoURL: https://github.com/Kulunchick/diploma
+          targetRevision: main
+          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{namespace}}"

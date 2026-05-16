@@ -274,35 +274,36 @@ jobs:
         id: sha
         run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      # Update image.tag in each changed chart's values.yaml.
+      # Update image.tag in each changed component's values-production file.
       # sed targets the line "  tag: <anything>" (2-space indent under image:).
-      # The values.yaml structure is controlled — only one such line per file.
+      # The values-production/<comp>.yaml structure is controlled — only one
+      # such line per file.
       - name: Bump frontend image.tag
         if: needs.changes.outputs.frontend == 'true'
         run: |
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
-            deploy/charts/frontend/values.yaml
+            deploy/values-production/frontend.yaml
 
       - name: Bump backend image.tag
         if: needs.changes.outputs.backend == 'true'
         run: |
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
-            deploy/charts/backend/values.yaml
+            deploy/values-production/backend.yaml
 
       - name: Bump worker image.tag
         if: needs.changes.outputs.worker == 'true'
         run: |
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
-            deploy/charts/worker/values.yaml
+            deploy/values-production/worker.yaml
 
       - name: Commit → rebase → push [skip ci]
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add deploy/charts/frontend/values.yaml \
-                  deploy/charts/backend/values.yaml  \
-                  deploy/charts/worker/values.yaml
+          git add deploy/values-production/frontend.yaml \
+                  deploy/values-production/backend.yaml  \
+                  deploy/values-production/worker.yaml
 
           # Nothing to commit if all components were unchanged (shouldn't
           # happen given the job's if-condition, but guard anyway).

@@ -1,9 +1,0 @@
-redis:
-  auth:
-    enabled: false
-  architecture: standalone
-  master:
-    persistence:
-      enabled: false
-  replica:
-    replicaCount: 0

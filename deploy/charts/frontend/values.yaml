@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/kulunchick/diploma-frontend
-  # tag is set by CI write-back on every deploy (git SHA)
-  tag: ab6ac6b4
+  # Default; CI writes the real SHA into deploy/values-production/frontend.yaml
+  tag: latest
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -27,6 +27,12 @@ ingress:
   # WS timeout for /api/jobs/{id}/events long-poll connections
   proxyReadTimeout: "3600"
   proxySendTimeout: "3600"
+  # Backend Service that handles /api/* — must match the release name of the
+  # backend chart (e.g. "backend-backend" in prod, "diploma-backend-backend"
+  # locally — keyed by Argo CD Application name + chart name).
+  backend:
+    serviceName: "backend-backend"
+    servicePort: 8000
 
 # Set to existing secret name if ghcr packages are private
 imagePullSecrets: []

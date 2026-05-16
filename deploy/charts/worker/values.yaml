@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/kulunchick/diploma-worker
-  # tag is set by CI write-back on every deploy (git SHA)
-  tag: ab6ac6b4
+  # Default; CI writes the real SHA into deploy/values-production/worker.yaml
+  tag: latest
   pullPolicy: IfNotPresent
 
 replicaCount: 1

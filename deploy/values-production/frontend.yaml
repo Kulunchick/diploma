@@ -1,0 +1,6 @@
+image:
+  tag: ab6ac6b4  # set by CI write-back on every deploy (git SHA)
+
+ingress:
+  # REQUIRED — your production domain. Example: "app.example.com"
+  host: ""
