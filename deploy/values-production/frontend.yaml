@@ -1,5 +1,5 @@
 image:
-  tag: d8fad2a0  # set by CI write-back on every deploy (8-char git SHA)
+  tag: 014270cb
 
 ingress:
   # REQUIRED — your production domain. Example: "app.example.com"
