@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: diploma
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - chart: cluster-issuer
+            namespace: cert-manager   # ClusterIssuer is cluster-scoped but helm release lives here
+          - chart: backend
+            namespace: default
+          - chart: worker
+            namespace: default
+          - chart: frontend
+            namespace: default
+  template:
+    metadata:
+      name: "{{chart}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Kulunchick/diploma
+        targetRevision: main
+        path: "deploy/charts/{{chart}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: true      # remove resources deleted from the chart
+          selfHeal: true   # revert manual kubectl changes
+        syncOptions:
+          - CreateNamespace=true

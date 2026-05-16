@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cluster-issuer
+description: cert-manager ClusterIssuer for Let's Encrypt (cluster-scoped, install once)
+type: application
+version: 0.1.0

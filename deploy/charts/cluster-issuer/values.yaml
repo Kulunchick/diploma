@@ -1,0 +1,9 @@
+# Email for Let's Encrypt expiry notifications — required.
+email: ""
+
+acme:
+  # Switch to staging URL to test without hitting rate limits:
+  # https://acme-staging-v02.api.letsencrypt.org/directory
+  server: "https://acme-v02.api.letsencrypt.org/directory"
+
+name: "letsencrypt-prod"

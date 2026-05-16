@@ -20,7 +20,7 @@ resources:
     memory: "128Mi"
 
 ingress:
-  host: "TODO_YOUR_DOMAIN"
+  host: ""  # required: your domain, e.g. "example.com"
   clusterIssuer: "letsencrypt-prod"
   tlsSecretName: "tls"
   # WS timeout for /api/jobs/{id}/events long-poll connections

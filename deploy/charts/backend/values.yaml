@@ -12,7 +12,7 @@ config:
   taskQueue: "operations"
   redisUrl: "redis://redis-master.redis.svc.cluster.local:6379"
   # Allowed CORS origins for local dev; in prod same-origin via Ingress
-  corsOrigins: "https://TODO_YOUR_DOMAIN"
+  corsOrigins: ""  # required: your domain, e.g. "https://example.com"
 
 resources:
   requests:

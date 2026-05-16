@@ -44,24 +44,24 @@ before applying the Ingress (cert-manager needs HTTP-01 challenge to succeed).
 
 ## Before First Deploy
 
-1. **Fill in TODOs** in the chart values and cluster manifest:
+Set your domain and email in the chart values — these are the only values
+that must be filled in before the first deploy:
 
-   | File | TODO |
-   |---|---|
-   | `deploy/cluster-issuer.yaml` | Replace `TODO_YOUR_EMAIL` with your email |
-   | `deploy/charts/frontend/values.yaml` | Replace `TODO_YOUR_DOMAIN` in `ingress.host` |
+```bash
+# deploy/charts/cluster-issuer/values.yaml
+email: "you@example.com"
 
-2. **Build and push the images:**
+# deploy/charts/frontend/values.yaml
+ingress:
+  host: "example.com"
 
-   ```bash
-   # Frontend (one image for all envs — no build-time URL args)
-   docker build -t <REGISTRY>/ui:latest apps/ui/
-   docker push <REGISTRY>/ui:latest
+# deploy/charts/backend/values.yaml
+config:
+  corsOrigins: "https://example.com"
+```
 
-   # Backend / worker (same image, different CMD)
-   docker build -t <REGISTRY>/operations:latest apps/api/
-   docker push <REGISTRY>/operations:latest
-   ```
+Helm will refuse to render templates if these remain empty (`required` guards
+are in place on each field).
 
 ---
 
@@ -70,10 +70,10 @@ before applying the Ingress (cert-manager needs HTTP-01 challenge to succeed).
 ### First deploy
 
 ```bash
-# 1. Cluster-scoped resources (once per cluster, requires cert-manager CRDs)
-kubectl apply -f deploy/cluster-issuer.yaml
+# 1. ClusterIssuer for cert-manager (once per cluster)
+helm install cluster-issuer deploy/charts/cluster-issuer
 
-# 2–4. Install Helm charts (order matters: backend before worker before frontend)
+# 2–4. Application charts (order matters: backend before worker before frontend)
 helm install backend  deploy/charts/backend
 helm install worker   deploy/charts/worker
 helm install frontend deploy/charts/frontend
@@ -82,6 +82,7 @@ helm install frontend deploy/charts/frontend
 ### Upgrade (subsequent deploys)
 
 ```bash
+helm upgrade cluster-issuer deploy/charts/cluster-issuer
 helm upgrade backend  deploy/charts/backend
 helm upgrade worker   deploy/charts/worker
 helm upgrade frontend deploy/charts/frontend
@@ -110,6 +111,46 @@ kubectl get ingress
 curl -si https://YOUR_DOMAIN/
 curl -si https://YOUR_DOMAIN/config.js   # must contain apiBaseUrl: "/api"
 curl -I  https://YOUR_DOMAIN/config.js   # must have Cache-Control: no-store
+```
+
+---
+
+## Argo CD
+
+### Install Argo CD
+
+```bash
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+helm install argocd argo/argo-cd \
+  --namespace argocd --create-namespace
+```
+
+### Apply the ApplicationSet
+
+The ApplicationSet at `deploy/argocd/applicationset.yaml` generates one
+Argo CD Application per Helm chart and enables automated sync:
+
+```bash
+kubectl apply -f deploy/argocd/applicationset.yaml
+```
+
+After applying, Argo CD will detect the four charts (`cluster-issuer`,
+`backend`, `worker`, `frontend`) from the `main` branch and sync them
+automatically.  The CD pipeline's write-back job updates `image.tag` in
+the chart's `values.yaml`, which Argo CD picks up and rolls out within
+seconds — no manual `helm upgrade` needed.
+
+### Access the Argo CD UI
+
+```bash
+# Get the initial admin password
+kubectl get secret argocd-initial-admin-secret \
+  -n argocd -o jsonpath='{.data.password}' | base64 -d
+
+# Port-forward the UI
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Open https://localhost:8080
 ```
 
 ---
@@ -380,8 +421,5 @@ these values increased.
 ## Teardown
 
 ```bash
-helm uninstall frontend backend worker
-
-# ClusterIssuer is cluster-scoped — delete manually if no longer needed:
-kubectl delete -f deploy/cluster-issuer.yaml
+helm uninstall frontend backend worker cluster-issuer
 ```
