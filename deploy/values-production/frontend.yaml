@@ -1,5 +1,5 @@
 image:
-  tag: 014270cb
+  tag: d47fc5dd
 
 ingress:
   # REQUIRED — your production domain. Example: "app.example.com"
