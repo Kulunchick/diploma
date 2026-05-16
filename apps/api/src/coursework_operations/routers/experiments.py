@@ -1,4 +1,7 @@
-"""Thin wrappers: validate spec-specific input, start ExperimentWorkflow."""
+"""
+Thin wrappers: validate spec-specific input, start ExperimentWorkflow.
+No imports from apps/worker — workflow started by name string.
+"""
 import uuid
 from datetime import timedelta
 
@@ -7,13 +10,15 @@ from redis.asyncio import Redis
 from temporalio.client import Client
 
 from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from experiments.experiment1 import Experiment1Input
-from experiments.experiment2 import Experiment2Input
-from experiments.experiment3 import Experiment3Input
-from experiments.experiment4 import Experiment4Input
-from worker.config import TASK_QUEUE
-from worker.types import ExperimentInput
-from worker.workflows.experiment import ExperimentWorkflow
+from src.coursework_operations.temporal_types import (
+    EXPERIMENT_WORKFLOW_NAME,
+    Experiment1Input,
+    Experiment2Input,
+    Experiment3Input,
+    Experiment4Input,
+    ExperimentInput,
+    TASK_QUEUE,
+)
 
 router = APIRouter()
 
@@ -26,7 +31,7 @@ async def _start_experiment(
 ) -> dict:
     workflow_id = f"{experiment_type}-{uuid.uuid4()}"
     await client.start_workflow(
-        ExperimentWorkflow.run,
+        EXPERIMENT_WORKFLOW_NAME,
         ExperimentInput(experiment_type=experiment_type, params=params),
         id=workflow_id,
         task_queue=TASK_QUEUE,

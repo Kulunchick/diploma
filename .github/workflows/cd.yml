@@ -106,7 +106,6 @@ jobs:
         if: matrix.changed == 'true' && matrix.component == 'backend'
         run: |
           uv sync --frozen
-          uv run pip install ../worker --no-deps
           uv run pytest tests/ -q
         working-directory: apps/api
 
@@ -119,20 +118,36 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         if: matrix.changed == 'true' && matrix.component == 'worker'
 
-      - uses: actions/cache@v4
+      - name: Cache Cargo registry (worker)
         if: matrix.changed == 'true' && matrix.component == 'worker'
+        uses: actions/cache@v4
         with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            libs/operations/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('libs/operations/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Install Rust + maturin (worker)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build assignment_solver wheel (worker)
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        run: |
+          pip install maturin
+          maturin build --release --interpreter python3.13
+        working-directory: libs/operations
 
       - name: Worker — install + pytest
         if: matrix.changed == 'true' && matrix.component == 'worker'
         run: |
-          uv sync --frozen
-          uv run pip install ../worker --no-deps
-          uv run pytest tests/ -q
-        working-directory: apps/api
+          pip install -e ".[dev]"
+          pip install ../libs/operations/target/wheels/assignment_solver-*.whl \
+              --force-reinstall --no-deps
+          pytest tests/ -q
+        working-directory: apps/worker
 
   # ──────────────────────────────────────────────────────────────────────────
   # 3. Build + push to ghcr.io (only if ALL tests above passed)

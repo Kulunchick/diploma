@@ -119,17 +119,16 @@ jobs:
         run: uv sync --frozen
         working-directory: apps/api
 
-      - name: Install worker package
-        if: matrix.changed == 'true' && matrix.component == 'backend'
-        run: uv run pip install ../worker --no-deps
-        working-directory: apps/api
-
       - name: Backend — pytest
         if: matrix.changed == 'true' && matrix.component == 'backend'
         run: uv run pytest tests/ -q
         working-directory: apps/api
 
       # ── Worker ────────────────────────────────────────────────────────────
+      # Worker tests live in apps/worker/tests/ and test Temporal workflows +
+      # activities directly.  They require the locally-built assignment_solver
+      # (set_iteration_callback is missing in the PyPI wheel), so we build it
+      # from source first.  Cargo layers are cached by the GHA cache step.
       - name: Setup Python (worker)
         if: matrix.changed == 'true' && matrix.component == 'worker'
         uses: actions/setup-python@v5
@@ -140,28 +139,40 @@ jobs:
         if: matrix.changed == 'true' && matrix.component == 'worker'
         uses: astral-sh/setup-uv@v5
 
-      - name: Cache uv (worker)
+      - name: Cache Cargo registry (worker)
         if: matrix.changed == 'true' && matrix.component == 'worker'
         uses: actions/cache@v4
         with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            libs/operations/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('libs/operations/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
 
-      - name: Install backend deps (for worker tests)
+      - name: Install Rust + maturin (worker)
         if: matrix.changed == 'true' && matrix.component == 'worker'
-        run: uv sync --frozen
-        working-directory: apps/api
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install worker package (worker)
+      - name: Build assignment_solver wheel (worker)
         if: matrix.changed == 'true' && matrix.component == 'worker'
-        run: uv run pip install ../worker --no-deps
-        working-directory: apps/api
+        run: |
+          pip install maturin
+          maturin build --release --interpreter python3.13
+        working-directory: libs/operations
 
-      - name: Worker — pytest (shared test suite)
+      - name: Install worker package + local Rust wheel
         if: matrix.changed == 'true' && matrix.component == 'worker'
-        run: uv run pytest tests/ -q
-        working-directory: apps/api
+        run: |
+          pip install -e ".[dev]"
+          pip install libs/operations/target/wheels/assignment_solver-*.whl \
+              --force-reinstall --no-deps
+        working-directory: apps/worker
+
+      - name: Worker — pytest
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        run: pytest tests/ -q
+        working-directory: apps/worker
 
   # ──────────────────────────────────────────────────────────────────────────
   # 3. Build-check (PR only — verify Dockerfile builds, no push)

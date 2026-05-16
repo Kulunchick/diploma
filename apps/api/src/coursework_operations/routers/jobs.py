@@ -7,9 +7,7 @@ from temporalio.client import Client, WorkflowExecutionStatus
 from temporalio.service import RPCError
 
 from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from worker.types import ExperimentResult, SolveResult
-from worker.workflows.experiment import ExperimentWorkflow
-from worker.workflows.solve import SolveWorkflow
+from src.coursework_operations.temporal_types import ExperimentResult, SolveResult
 
 router = APIRouter(prefix="/jobs")
 
@@ -122,7 +120,7 @@ async def _experiment_adapter(websocket: WebSocket, handle, redis: Redis, workfl
             while True:
                 await asyncio.sleep(2)
                 try:
-                    prog = await handle.query(ExperimentWorkflow.progress)
+                    prog = await handle.query("progress")
                     await websocket.send_json({"type": "progress", **prog})
                 except Exception:
                     pass
@@ -138,7 +136,7 @@ async def _experiment_adapter(websocket: WebSocket, handle, redis: Redis, workfl
 
         # Send final progress so frontend sees 100 %.
         try:
-            prog = await handle.query(ExperimentWorkflow.progress)
+            prog = await handle.query("progress")
             await websocket.send_json({"type": "progress", **prog})
         except Exception:
             pass

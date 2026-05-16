@@ -7,14 +7,12 @@ RUN apt-get update && apt-get install -y \
     build-essential curl pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:$PATH"
 
 RUN pip install maturin
 
 WORKDIR /src
-# Copy only source files — skip target/ (large Rust build cache)
 COPY libs/operations/src/ ./src/
 COPY libs/operations/Cargo.toml libs/operations/Cargo.lock libs/operations/pyproject.toml ./
 
@@ -50,13 +48,6 @@ COPY --from=builder /app/.venv /app/.venv
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
-
-# Install the worker package (worker + experiments) into the same venv.
-# Its dependencies (pydantic, temporalio, redis, numpy) are already satisfied
-# by the api's uv sync above — so --no-deps avoids redundant reinstalls.
-COPY apps/worker/ /worker/
-ENV VIRTUAL_ENV=/app/.venv
-RUN uv pip install /worker/ --no-deps
 
 COPY apps/api/src src
 

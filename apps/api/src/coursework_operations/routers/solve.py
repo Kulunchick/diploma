@@ -7,9 +7,13 @@ from temporalio.client import Client
 
 from src.coursework_operations.models.task_request import TaskRequest
 from src.coursework_operations.routers.deps import get_redis, get_temporal_client
-from worker.config import TASK_QUEUE
-from worker.types import AntColonyParams, ProbabilisticParams, SolveInput
-from worker.workflows.solve import SolveWorkflow
+from src.coursework_operations.temporal_types import (
+    AntColonyParams,
+    ProbabilisticParams,
+    SOLVE_WORKFLOW_NAME,
+    TASK_QUEUE,
+    SolveInput,
+)
 
 router = APIRouter()
 
@@ -44,8 +48,9 @@ async def start_solve(
         redis_channel=redis_channel,
     )
 
+    # Use the registered workflow name — avoids importing the worker package.
     await client.start_workflow(
-        SolveWorkflow.run,
+        SOLVE_WORKFLOW_NAME,
         solve_input,
         id=workflow_id,
         task_queue=TASK_QUEUE,

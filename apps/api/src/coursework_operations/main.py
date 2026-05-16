@@ -8,7 +8,7 @@ from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 
 from src.coursework_operations.routers import experiments, jobs, solve
-from worker.config import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
+from src.coursework_operations.temporal_types import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 
 
 @asynccontextmanager
