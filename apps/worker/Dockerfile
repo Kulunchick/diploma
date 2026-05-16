@@ -30,15 +30,15 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-WORKDIR /app
+# Mirror repo layout so ../../libs/shared in pyproject.toml resolves:
+#   /workspace/apps/worker/../../libs/shared → /workspace/libs/shared  ✓
+WORKDIR /workspace
+COPY libs/shared/ libs/shared/
+COPY apps/worker/ apps/worker/
 
-# Install shared lib and worker package together so uv resolves the
-# shared path dependency without hitting PyPI.
-COPY libs/shared/ /shared/
-COPY apps/worker/ /worker/
-RUN uv venv .venv
-ENV VIRTUAL_ENV=/app/.venv
-RUN uv pip install /shared/ /worker/
+RUN uv venv apps/worker/.venv
+ENV VIRTUAL_ENV=/workspace/apps/worker/.venv
+RUN uv pip install libs/shared/ apps/worker/
 
 # Override the PyPI assignment_solver with our local Rust build.
 COPY --from=rust-builder /src/target/wheels/ /wheels/
@@ -49,7 +49,7 @@ RUN uv pip install /wheels/assignment_solver-*.whl --reinstall --no-deps
 # ============================================================
 FROM python:3.13-slim
 
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /workspace/apps/worker/.venv /app/.venv
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
