@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: diploma-local
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - chart: backend
+            namespace: default
+          - chart: worker
+            namespace: default
+          - chart: frontend
+            namespace: default
+  template:
+    metadata:
+      name: "diploma-{{chart}}"
+    spec:
+      project: default
+      sources:
+        # Primary: the Helm chart
+        - repoURL: https://github.com/Kulunchick/diploma
+          targetRevision: main
+          path: "deploy/charts/{{chart}}"
+          helm:
+            # $values resolves to the root of the second source below
+            valueFiles:
+              - $values/deploy/values-local/{{chart}}.yaml
+        # Secondary: repo root used only as a values file source
+        - repoURL: https://github.com/Kulunchick/diploma
+          targetRevision: main
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
