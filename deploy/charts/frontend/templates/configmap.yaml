@@ -6,4 +6,3 @@ metadata:
     {{- include "frontend.labels" . | nindent 4 }}
 data:
   APP_API_BASE_URL: {{ .Values.config.apiBaseUrl | quote }}
-  APP_USE_TEMPORAL_API: {{ .Values.config.useTemporalApi | quote }}

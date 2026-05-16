@@ -453,7 +453,7 @@ const Experiment4 = () => {
                 <div className="m-5">
                     <Button onClick={handleSolve}>Solve</Button>
                     <Button variant="outline" onClick={handleClear} className="mx-5">Clear</Button>
-                    {USE_TEMPORAL_API && stream.status === 'running' && (
+                    {stream.status === 'running' && (
                         <Button variant="destructive" onClick={() => void stream.cancel()} className="mr-5">Відмінити</Button>
                     )}
                     <Button
@@ -464,7 +464,7 @@ const Experiment4 = () => {
                         Export to CSV
                     </Button>
 
-                    {USE_TEMPORAL_API && stream.status === 'running' && stream.progress && (
+                    {stream.status === 'running' && stream.progress && (
                         <div className="mt-4">
                             <p className="text-sm text-gray-500 mb-1">
                                 Прогрес: {stream.progress.completed} / {stream.progress.total}

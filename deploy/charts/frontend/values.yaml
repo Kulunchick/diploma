@@ -10,7 +10,6 @@ replicaCount: 2
 # Runtime config injected into /config.js at pod start (via initContainer)
 config:
   apiBaseUrl: "/api"
-  useTemporalApi: "true"
 
 resources:
   requests:

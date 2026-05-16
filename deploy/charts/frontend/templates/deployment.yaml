@@ -28,8 +28,7 @@ spec:
               cp -rp /usr/share/nginx/html/. /html-vol/
               cat > /html-vol/config.js << EOF
               window.__APP_CONFIG__ = {
-                "apiBaseUrl": "${APP_API_BASE_URL}",
-                "useTemporalApi": ${APP_USE_TEMPORAL_API}
+                "apiBaseUrl": "${APP_API_BASE_URL}"
               };
               EOF
           envFrom:

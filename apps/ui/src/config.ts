@@ -14,8 +14,6 @@ declare global {
     __APP_CONFIG__?: {
       /** HTTP base path. Prod: "/api". Dev: undefined → import.meta.env fallback. */
       apiBaseUrl?: string;
-      /** Runtime feature flag, controlled via ConfigMap without image rebuild. */
-      useTemporalApi?: boolean;
     };
   }
 }
@@ -58,10 +56,3 @@ export const WS_BASE_URL: string = cfg?.apiBaseUrl
   : ((import.meta.env as ImportMetaEnv).VITE_WS_BASE_URL ??
       'ws://localhost:8000/api');
 
-// ---------------------------------------------------------------------------
-// Feature flag — kept for future rollback capability via ConfigMap.
-// Currently unused in components (USE_TEMPORAL_API was removed in step 5
-// of the Temporal migration), but available for re-introduction without
-// an image rebuild.
-// ---------------------------------------------------------------------------
-export const USE_TEMPORAL_API: boolean = cfg?.useTemporalApi ?? true;
