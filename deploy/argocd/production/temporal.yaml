@@ -8,32 +8,39 @@ spec:
   source:
     chart: temporal
     repoURL: https://go.temporal.io/helm-charts
-    targetRevision: "0.74.0"
+    targetRevision: "1.2.0"
     helm:
       values: |
         server:
           replicaCount: 1
           config:
             persistence:
-              defaultStore: default
-              visibilityStore: visibility
-              default:
-                driver: cassandra
-                cassandra:
-                  hosts:
-                    - temporal-cassandra
-                  keyspace: temporal
-                  replicationFactor: 3
-              visibility:
-                driver: cassandra
-                cassandra:
-                  hosts:
-                    - temporal-cassandra
-                  keyspace: temporal_visibility
-                  replicationFactor: 3
-        cassandra:
-          config:
-            cluster_size: 3
+              numHistoryShards: 512
+              datastores:
+                default:
+                  sql:
+                    pluginName: postgres12
+                    driverName: postgres12
+                    databaseName: temporal
+                    connectAddr: "postgres-postgresql.temporal.svc.cluster.local:5432"
+                    connectProtocol: tcp
+                    user: temporal
+                    existingSecret: temporal-db-secret
+                    secretKey: password
+                    createDatabase: false
+                    manageSchema: false
+                visibility:
+                  sql:
+                    pluginName: postgres12
+                    driverName: postgres12
+                    databaseName: temporal_visibility
+                    connectAddr: "postgres-postgresql.temporal.svc.cluster.local:5432"
+                    connectProtocol: tcp
+                    user: temporal
+                    existingSecret: temporal-db-secret
+                    secretKey: password
+                    createDatabase: false
+                    manageSchema: false
         prometheus:
           enabled: false
         grafana:
