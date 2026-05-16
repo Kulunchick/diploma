@@ -1,0 +1,10 @@
+image:
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+config:
+  apiBaseUrl: "http://localhost:8000/api"
+
+ingress:
+  enabled: false
