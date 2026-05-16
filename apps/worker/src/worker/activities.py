@@ -65,10 +65,14 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
         def iteration_callback(data: dict) -> None:
             asyncio.run_coroutine_threadsafe(_async_heartbeat(data), loop)
             if redis:
+                # XADD instead of PUBLISH so late WS subscribers can replay
+                # iterations from the start. maxlen caps memory growth.
                 asyncio.run_coroutine_threadsafe(
-                    redis.publish(
+                    redis.xadd(
                         channel,
-                        json.dumps({"type": "iteration", "algorithm": algo, **data}),
+                        {"data": json.dumps({"type": "iteration", "algorithm": algo, **data})},
+                        maxlen=5000,
+                        approximate=True,
                     ),
                     loop,
                 )

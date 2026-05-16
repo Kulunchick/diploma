@@ -54,34 +54,52 @@ async def _solve_adapter(websocket: WebSocket, handle, redis: Redis, workflow_id
     """
     Maps Temporal/Redis events to the legacy /ws/solve format:
       {type:"start", algorithm}  — sent immediately on connect
-      {type:"iteration", ...}    — forwarded from Redis pub/sub
+      {type:"iteration", ...}    — forwarded from Redis Stream (XREAD)
       {type:"result", ...}       — from SolveResult when workflow completes
       {type:"complete"}          — after both results are sent
+
+    Stream (not pub/sub) is used so late or reconnecting subscribers replay
+    iterations from id "0" without losing anything published before connect.
     """
-    channel = f"solve:{workflow_id}"
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(channel)
+    stream_key = f"solve:{workflow_id}"
 
     # Frontend expects "start" for each algorithm immediately.
     await websocket.send_json({"type": "start", "algorithm": "ant_colony"})
     await websocket.send_json({"type": "start", "algorithm": "probabilistic"})
 
-    async def forward_redis() -> None:
+    # Shared cursor so the post-result flush can resume where the live task left off.
+    state = {"last_id": "0", "stop": False}
+
+    async def forward_stream() -> None:
         try:
-            async for message in pubsub.listen():
-                if message["type"] == "message":
-                    await websocket.send_json(json.loads(message["data"]))
+            while not state["stop"]:
+                msgs = await redis.xread({stream_key: state["last_id"]}, block=500, count=100)
+                if not msgs:
+                    continue
+                for _, entries in msgs:
+                    for entry_id, fields in entries:
+                        await websocket.send_json(json.loads(fields["data"]))
+                        state["last_id"] = entry_id
         except asyncio.CancelledError:
             pass
 
-    redis_task = asyncio.create_task(forward_redis())
+    stream_task = asyncio.create_task(forward_stream())
     try:
         result: SolveResult = await handle.result()
 
-        # Cancel Redis reader and drain briefly before sending final events.
-        redis_task.cancel()
-        await asyncio.gather(redis_task, return_exceptions=True)
-        await asyncio.sleep(0.05)
+        # Stop the live reader and flush anything XADD'd just before completion.
+        state["stop"] = True
+        stream_task.cancel()
+        await asyncio.gather(stream_task, return_exceptions=True)
+
+        while True:
+            tail = await redis.xread({stream_key: state["last_id"]}, count=100)
+            if not tail:
+                break
+            for _, entries in tail:
+                for entry_id, fields in entries:
+                    await websocket.send_json(json.loads(fields["data"]))
+                    state["last_id"] = entry_id
 
         await websocket.send_json({
             "type": "result",
@@ -97,12 +115,16 @@ async def _solve_adapter(websocket: WebSocket, handle, redis: Redis, workflow_id
         })
         await websocket.send_json({"type": "complete"})
     except Exception:
-        redis_task.cancel()
-        await asyncio.gather(redis_task, return_exceptions=True)
+        state["stop"] = True
+        stream_task.cancel()
+        await asyncio.gather(stream_task, return_exceptions=True)
         raise
     finally:
-        await pubsub.unsubscribe(channel)
-        await pubsub.aclose()
+        # Keep the stream around for ~1h so a reattach replays history.
+        try:
+            await redis.expire(stream_key, 3600)
+        except Exception:
+            pass
 
 
 async def _experiment_adapter(websocket: WebSocket, handle, redis: Redis, workflow_id: str):

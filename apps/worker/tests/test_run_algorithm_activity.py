@@ -78,7 +78,7 @@ async def test_iteration_callback_fires_without_redis():
         algorithm="ant_colony",
         ant_colony_params=AntColonyParams(num_ants=3, kmax=5),
         variant_key="test",
-        redis_channel="test-channel",  # no Redis client set → publish is skipped
+        redis_channel="test-channel",  # no Redis client set → xadd is skipped
     )
     result: RunResult = await env.run(run_algorithm_activity, inp)
     assert result.value > 0
