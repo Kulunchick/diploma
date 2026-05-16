@@ -1,4 +1,5 @@
 image:
+  tag: d8fad2a0  # set by CI write-back on every deploy (8-char git SHA)
   pullPolicy: IfNotPresent
 
 replicaCount: 1

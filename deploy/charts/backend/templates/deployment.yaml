@@ -35,7 +35,7 @@ spec:
                 name: {{ include "backend.fullname" . }}-config
       containers:
         - name: backend
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag must be set in values-local/backend.yaml or values-production/backend.yaml" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["python", "-m", "src.operations.main"]
           ports:

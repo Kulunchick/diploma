@@ -20,7 +20,7 @@ spec:
       {{- end }}
       initContainers:
         - name: init-config
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag must be set in values-local/frontend.yaml or values-production/frontend.yaml" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/bin/sh", "-c"]
           args:
@@ -44,7 +44,7 @@ spec:
             allowPrivilegeEscalation: false
       containers:
         - name: frontend
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag must be set in values-local/frontend.yaml or values-production/frontend.yaml" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["nginx"]
           args: ["-g", "daemon off;"]

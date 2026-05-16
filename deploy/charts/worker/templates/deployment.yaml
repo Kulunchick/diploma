@@ -35,7 +35,7 @@ spec:
                 name: {{ include "worker.fullname" . }}-config
       containers:
         - name: worker
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag must be set in values-local/worker.yaml or values-production/worker.yaml" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
             - configMapRef:

@@ -1,3 +1,2 @@
-# Production overrides for the worker chart.
-# Image tag is set in deploy/charts/worker/values.yaml by CI write-back —
-# both envs share the same SHA, so no per-env override here.
+image:
+  tag: ab6ac6b4  # set by CI write-back on every deploy (8-char git SHA)

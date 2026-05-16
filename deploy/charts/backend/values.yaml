@@ -1,7 +1,8 @@
 image:
   repository: ghcr.io/kulunchick/diploma-backend
-  # tag is set by CI write-back on every deploy (immutable 8-char git SHA)
-  tag: ab6ac6b4
+  # tag MUST be set in deploy/values-{local,production}/backend.yaml
+  # (written by CI on every deploy — immutable 8-char git SHA).
+  tag: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 1
