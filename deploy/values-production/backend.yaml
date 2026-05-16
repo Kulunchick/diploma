@@ -1,6 +1,3 @@
-image:
-  tag: ab6ac6b4  # set by CI write-back on every deploy (git SHA)
-
 config:
   # REQUIRED — your production domain(s), comma-separated.
   # Example: "https://app.example.com"

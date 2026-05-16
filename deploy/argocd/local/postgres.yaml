@@ -7,19 +7,16 @@ metadata:
     argocd.argoproj.io/sync-wave: "-2"
 spec:
   project: default
-  source:
-    chart: postgresql
-    repoURL: registry-1.docker.io/bitnamicharts
-    targetRevision: "18.6.6"
-    helm:
-      values: |
-        auth:
-          username: temporal
-          password: temporal
-          database: temporal
-        primary:
-          persistence:
-            enabled: false
+  sources:
+    - chart: postgresql
+      repoURL: registry-1.docker.io/bitnamicharts
+      targetRevision: "18.6.6"
+      helm:
+        valueFiles:
+          - $values/deploy/values-local/postgres.yaml
+    - repoURL: https://github.com/Kulunchick/diploma
+      targetRevision: main
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: temporal

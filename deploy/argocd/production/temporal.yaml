@@ -7,42 +7,16 @@ metadata:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   project: default
-  source:
-    chart: temporal
-    repoURL: https://go.temporal.io/helm-charts
-    targetRevision: "1.2.0"
-    helm:
-      values: |
-        server:
-          replicaCount: 1
-          config:
-            persistence:
-              numHistoryShards: 512
-              datastores:
-                default:
-                  sql:
-                    pluginName: postgres12
-                    driverName: postgres12
-                    databaseName: temporal
-                    connectAddr: "postgres-postgresql.temporal.svc.cluster.local:5432"
-                    connectProtocol: tcp
-                    user: temporal
-                    existingSecret: temporal-db-secret
-                    secretKey: password
-                    createDatabase: false
-                    manageSchema: false
-                visibility:
-                  sql:
-                    pluginName: postgres12
-                    driverName: postgres12
-                    databaseName: temporal_visibility
-                    connectAddr: "postgres-postgresql.temporal.svc.cluster.local:5432"
-                    connectProtocol: tcp
-                    user: temporal
-                    existingSecret: temporal-db-secret
-                    secretKey: password
-                    createDatabase: false
-                    manageSchema: false
+  sources:
+    - chart: temporal
+      repoURL: https://go.temporal.io/helm-charts
+      targetRevision: "1.2.0"
+      helm:
+        valueFiles:
+          - $values/deploy/values-production/temporal.yaml
+    - repoURL: https://github.com/Kulunchick/diploma
+      targetRevision: main
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: temporal

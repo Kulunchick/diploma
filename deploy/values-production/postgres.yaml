@@ -1,0 +1,8 @@
+auth:
+  username: temporal
+  existingSecret: temporal-db-secret
+  database: temporal
+
+primary:
+  persistence:
+    size: 10Gi
