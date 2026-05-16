@@ -9,10 +9,6 @@ spec:
         elements:
           - chart: cluster-issuer
             namespace: cert-manager
-          - chart: redis
-            namespace: redis
-          - chart: temporal
-            namespace: temporal
           - chart: backend
             namespace: default
           - chart: worker
