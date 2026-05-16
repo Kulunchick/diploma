@@ -107,21 +107,27 @@ export default function Solve() {
     const stream = useJobStream<SolveResult>({ streamMessages: true });
 
     const chartData = useMemo(() => {
-        const data: Array<{ iteration: number; aco: number; prob: number }> = [];
+        // Per-algorithm maps — messages can arrive interleaved, so we
+        // collect first and assemble in iteration order afterwards.
+        const acoByIter = new Map<number, number>();
+        const probByIter = new Map<number, number>();
         for (const msg of stream.messages) {
             if (msg.type !== 'iteration') continue;
-            const existing = data.find(p => p.iteration === msg.iteration);
-            if (existing) {
-                if (msg.algorithm === 'ant_colony') existing.aco = Math.round(msg.current_best_value);
-                else existing.prob = Math.round(msg.current_best_value);
-            } else {
-                const last = data[data.length - 1] ?? { aco: 0, prob: 0 };
-                data.push({
-                    iteration: msg.iteration,
-                    aco: msg.algorithm === 'ant_colony' ? Math.round(msg.current_best_value) : last.aco,
-                    prob: msg.algorithm === 'probabilistic' ? Math.round(msg.current_best_value) : last.prob,
-                });
-            }
+            const value = Math.round(msg.current_best_value);
+            if (msg.algorithm === 'ant_colony') acoByIter.set(msg.iteration, value);
+            else probByIter.set(msg.iteration, value);
+        }
+
+        const allIters = new Set<number>([...acoByIter.keys(), ...probByIter.keys()]);
+        const sorted = [...allIters].sort((a, b) => a - b);
+
+        const data: Array<{ iteration: number; aco: number; prob: number }> = [];
+        let lastAco = 0;
+        let lastProb = 0;
+        for (const iter of sorted) {
+            lastAco = acoByIter.get(iter) ?? lastAco;
+            lastProb = probByIter.get(iter) ?? lastProb;
+            data.push({ iteration: iter, aco: lastAco, prob: lastProb });
         }
         return data;
     }, [stream.messages]);
