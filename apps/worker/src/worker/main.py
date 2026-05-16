@@ -8,6 +8,7 @@ from temporalio.worker import Worker
 from worker.activities import (
     generate_experiment_runs_activity,
     run_algorithm_activity,
+    run_experiment_variant_activity,
     set_redis_client,
 )
 from worker.config import REDIS_URL, TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPACE
@@ -29,7 +30,11 @@ async def main() -> None:
         client,
         task_queue=TASK_QUEUE,
         workflows=[SolveWorkflow, ExperimentWorkflow],
-        activities=[run_algorithm_activity, generate_experiment_runs_activity],
+        activities=[
+            run_algorithm_activity,
+            run_experiment_variant_activity,
+            generate_experiment_runs_activity,
+        ],
     )
 
     print(f"Worker started — task queue: {TASK_QUEUE!r}, host: {TEMPORAL_HOST}")

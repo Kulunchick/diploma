@@ -14,11 +14,16 @@ from temporalio import activity
 
 from worker.types import (
     AntColonyParams,
+    ExperimentVariantInput,
     GenerateRunsInput,
     ProbabilisticParams,
     RunAlgorithmInput,
     RunResult,
 )
+
+
+def _experiment_runs_key(workflow_id: str) -> str:
+    return f"experiment_runs:{workflow_id}"
 
 _redis: Optional[Redis] = None
 
@@ -30,6 +35,29 @@ def set_redis_client(client: Redis) -> None:
 
 @activity.defn
 async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
+    return await _run_algorithm_core(input)
+
+
+@activity.defn
+async def run_experiment_variant_activity(input: ExperimentVariantInput) -> RunResult:
+    """
+    Fetches the variant for this index from Redis (written by
+    generate_experiment_runs_activity) and runs it. Keeps the activity
+    input small so the Temporal payload limit is never approached even
+    for experiments with hundreds of variants.
+    """
+    if _redis is None:
+        raise RuntimeError("Redis client is not initialized")
+    key = _experiment_runs_key(activity.info().workflow_id)
+    raw = await _redis.get(key)
+    if raw is None:
+        raise RuntimeError(f"Experiment runs not found in Redis: {key}")
+    runs_data = json.loads(raw)
+    run_input = RunAlgorithmInput.model_validate(runs_data[input.index])
+    return await _run_algorithm_core(run_input)
+
+
+async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
     loop = asyncio.get_running_loop()
 
     rust_task = RustTask(
@@ -122,9 +150,12 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
 
 
 @activity.defn
-async def generate_experiment_runs_activity(
-    input: GenerateRunsInput,
-) -> list[RunAlgorithmInput]:
+async def generate_experiment_runs_activity(input: GenerateRunsInput) -> int:
+    """
+    Generates the variant list, stores it in Redis as a single JSON blob
+    keyed by workflow_id, and returns the count. Keeps the Temporal
+    workflow history payload tiny no matter how many variants there are.
+    """
     from experiments.registry import EXPERIMENT_REGISTRY
 
     spec = EXPERIMENT_REGISTRY.get(input.experiment_type)
@@ -132,7 +163,15 @@ async def generate_experiment_runs_activity(
         raise ValueError(f"Unknown experiment type: {input.experiment_type!r}")
 
     validated_input = spec.input_model.model_validate(input.params)
-    return spec.generate_runs(validated_input)
+    runs = spec.generate_runs(validated_input)
+
+    if _redis is None:
+        raise RuntimeError("Redis client is not initialized")
+    key = _experiment_runs_key(activity.info().workflow_id)
+    # 24h TTL — enough for any running experiment to finish and replay.
+    await _redis.set(key, json.dumps([r.model_dump() for r in runs]), ex=86400)
+
+    return len(runs)
 
 
 async def _async_heartbeat(data: dict) -> None:

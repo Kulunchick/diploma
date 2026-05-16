@@ -37,3 +37,8 @@ class RunResult(BaseModel):
 class GenerateRunsInput(BaseModel):
     experiment_type: str
     params: dict
+
+
+class ExperimentVariantInput(BaseModel):
+    """Reference to one variant stored in Redis by the generator activity."""
+    index: int

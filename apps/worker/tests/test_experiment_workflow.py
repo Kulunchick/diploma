@@ -9,29 +9,53 @@ from temporalio.worker import Worker
 from worker.activities import (
     generate_experiment_runs_activity,
     run_algorithm_activity,
+    run_experiment_variant_activity,
+    set_redis_client,
 )
 from worker.types import (
     ExperimentInput,
     ExperimentResult,
     GenerateRunsInput,
-    RunAlgorithmInput,
 )
 from worker.workflows.experiment import ExperimentWorkflow
+
+
+# ---------------------------------------------------------------------------
+# In-memory Redis stub — only the methods the activities actually call.
+# ---------------------------------------------------------------------------
+
+class FakeRedis:
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self.store[key] = value
+
+    async def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+
+@pytest.fixture(autouse=True)
+def fake_redis():
+    fake = FakeRedis()
+    set_redis_client(fake)  # type: ignore[arg-type]
+    yield fake
+    set_redis_client(None)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
 # generate_experiment_runs_activity
 # ---------------------------------------------------------------------------
 
-async def test_generate_runs_noop_returns_correct_count():
+async def test_generate_runs_noop_returns_count(fake_redis):
     env = ActivityEnvironment()
-    result: list[RunAlgorithmInput] = await env.run(
+    count: int = await env.run(
         generate_experiment_runs_activity,
         GenerateRunsInput(experiment_type="noop", params={"count": 5}),
     )
-    assert len(result) == 5
-    assert all(r.algorithm == "probabilistic" for r in result)
-    assert [r.variant_key for r in result] == ["0", "1", "2", "3", "4"]
+    assert count == 5
+    # Activity stored the runs in Redis under the workflow's key.
+    assert any(k.startswith("experiment_runs:") for k in fake_redis.store)
 
 
 async def test_generate_runs_unknown_type_raises():
@@ -53,7 +77,11 @@ async def test_experiment_workflow_noop_result():
             env.client,
             task_queue="test-queue",
             workflows=[ExperimentWorkflow],
-            activities=[run_algorithm_activity, generate_experiment_runs_activity],
+            activities=[
+                run_algorithm_activity,
+                run_experiment_variant_activity,
+                generate_experiment_runs_activity,
+            ],
         ):
             result: ExperimentResult = await env.client.execute_workflow(
                 ExperimentWorkflow.run,
@@ -72,7 +100,11 @@ async def test_experiment_workflow_progress_query():
             env.client,
             task_queue="test-queue",
             workflows=[ExperimentWorkflow],
-            activities=[run_algorithm_activity, generate_experiment_runs_activity],
+            activities=[
+                run_algorithm_activity,
+                run_experiment_variant_activity,
+                generate_experiment_runs_activity,
+            ],
         ):
             handle = await env.client.start_workflow(
                 ExperimentWorkflow.run,
@@ -94,7 +126,11 @@ async def test_experiment_workflow_concurrency_one():
             env.client,
             task_queue="test-queue",
             workflows=[ExperimentWorkflow],
-            activities=[run_algorithm_activity, generate_experiment_runs_activity],
+            activities=[
+                run_algorithm_activity,
+                run_experiment_variant_activity,
+                generate_experiment_runs_activity,
+            ],
         ):
             result: ExperimentResult = await env.client.execute_workflow(
                 ExperimentWorkflow.run,

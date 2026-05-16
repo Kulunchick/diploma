@@ -8,13 +8,13 @@ with workflow.unsafe.imports_passed_through():
     from experiments.registry import EXPERIMENT_REGISTRY
     from worker.activities import (
         generate_experiment_runs_activity,
-        run_algorithm_activity,
+        run_experiment_variant_activity,
     )
     from worker.types import (
         ExperimentInput,
         ExperimentResult,
+        ExperimentVariantInput,
         GenerateRunsInput,
-        RunAlgorithmInput,
         RunResult,
     )
 
@@ -28,7 +28,10 @@ class ExperimentWorkflow:
 
     @workflow.run
     async def run(self, input: ExperimentInput) -> ExperimentResult:
-        runs: list[RunAlgorithmInput] = await workflow.execute_activity(
+        # The generator activity stores the full variant list in Redis and
+        # returns only the count, so we never pull the bulky list into the
+        # workflow history.
+        count: int = await workflow.execute_activity(
             generate_experiment_runs_activity,
             GenerateRunsInput(
                 experiment_type=input.experiment_type,
@@ -37,15 +40,15 @@ class ExperimentWorkflow:
             start_to_close_timeout=timedelta(minutes=5),
             retry_policy=RetryPolicy(maximum_attempts=1),
         )
-        self._total = len(runs)
+        self._total = count
 
         semaphore = asyncio.Semaphore(input.concurrency)
 
-        async def run_one(run_input: RunAlgorithmInput) -> RunResult:
+        async def run_one(index: int) -> RunResult:
             async with semaphore:
                 result: RunResult = await workflow.execute_activity(
-                    run_algorithm_activity,
-                    run_input,
+                    run_experiment_variant_activity,
+                    ExperimentVariantInput(index=index),
                     start_to_close_timeout=timedelta(minutes=30),
                     heartbeat_timeout=timedelta(seconds=30),
                     retry_policy=RetryPolicy(maximum_attempts=1),
@@ -56,14 +59,16 @@ class ExperimentWorkflow:
 
         try:
             results: list[RunResult] = list(
-                await asyncio.gather(*[run_one(r) for r in runs])
+                await asyncio.gather(*[run_one(i) for i in range(count)])
             )
         except asyncio.CancelledError:
             raise
 
         spec = EXPERIMENT_REGISTRY[input.experiment_type]
         validated_input = spec.input_model.model_validate(input.params)
-        aggregated = spec.aggregate(results, runs, validated_input)
+        # aggregate() takes `runs` for protocol compatibility but no
+        # experiment implementation uses it — pass an empty list.
+        aggregated = spec.aggregate(results, [], validated_input)
 
         return ExperimentResult(data=aggregated.model_dump())
 
