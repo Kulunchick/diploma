@@ -1,0 +1,9 @@
+redis:
+  auth:
+    enabled: false
+  architecture: standalone
+  master:
+    persistence:
+      size: 8Gi
+  replica:
+    replicaCount: 1

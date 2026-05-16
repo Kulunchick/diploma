@@ -7,6 +7,10 @@ spec:
   generators:
     - list:
         elements:
+          - chart: redis
+            namespace: default
+          - chart: temporal
+            namespace: temporal
           - chart: backend
             namespace: default
           - chart: worker

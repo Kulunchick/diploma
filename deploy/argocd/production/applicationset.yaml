@@ -8,7 +8,11 @@ spec:
     - list:
         elements:
           - chart: cluster-issuer
-            namespace: cert-manager   # ClusterIssuer is cluster-scoped but helm release lives here
+            namespace: cert-manager
+          - chart: redis
+            namespace: redis
+          - chart: temporal
+            namespace: temporal
           - chart: backend
             namespace: default
           - chart: worker
@@ -29,7 +33,7 @@ spec:
         namespace: "{{namespace}}"
       syncPolicy:
         automated:
-          prune: true      # remove resources deleted from the chart
-          selfHeal: true   # revert manual kubectl changes
+          prune: true
+          selfHeal: true
         syncOptions:
           - CreateNamespace=true

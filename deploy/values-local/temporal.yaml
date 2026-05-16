@@ -1,0 +1,12 @@
+temporal:
+  server:
+    replicaCount: 1
+  cassandra:
+    config:
+      cluster_size: 1
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+  elasticsearch:
+    enabled: false
