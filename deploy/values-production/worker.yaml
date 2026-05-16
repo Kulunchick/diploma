@@ -1,2 +1,2 @@
 image:
-  tag: ab6ac6b4  # set by CI write-back on every deploy (8-char git SHA)
+  tag: 0d894ea4
