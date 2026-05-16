@@ -20,16 +20,22 @@ spec:
       {{- end }}
       initContainers:
         - name: wait-temporal
-          image: alpine:3
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - sh
+            - python
             - -c
             - |
-              until nc -z \
-                $(echo $TEMPORAL_HOST | cut -d: -f1) \
-                $(echo $TEMPORAL_HOST | cut -d: -f2); do
-                echo "waiting for temporal at $TEMPORAL_HOST..."; sleep 2
-              done
+              import socket, time, os
+              host, port = os.environ["TEMPORAL_HOST"].split(":")
+              while True:
+                  try:
+                      socket.create_connection((host, int(port)), timeout=2).close()
+                      print(f"temporal is ready at {host}:{port}")
+                      break
+                  except OSError:
+                      print(f"waiting for temporal at {host}:{port}...")
+                      time.sleep(2)
           envFrom:
             - configMapRef:
                 name: {{ include "worker.fullname" . }}-config
