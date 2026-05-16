@@ -29,15 +29,19 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-WORKDIR /app
-COPY libs/shared/ /libs/shared/
-COPY apps/api/pyproject.toml apps/api/uv.lock ./
+# Mirror repo layout so the ../../libs/shared path dep in uv.lock resolves:
+#   /workspace/apps/api/../../libs/shared → /workspace/libs/shared  ✓
+WORKDIR /workspace
+COPY libs/shared/ libs/shared/
+COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/
+
+WORKDIR /workspace/apps/api
 RUN uv sync --frozen --no-dev
 
 # Override the PyPI assignment_solver with our local build
 # (local build has set_iteration_callback; PyPI 0.5.0 does not)
 COPY --from=rust-builder /src/target/wheels/ /wheels/
-ENV VIRTUAL_ENV=/app/.venv
+ENV VIRTUAL_ENV=/workspace/apps/api/.venv
 RUN uv pip install /wheels/assignment_solver-*.whl --reinstall
 
 # ============================================================
@@ -45,7 +49,7 @@ RUN uv pip install /wheels/assignment_solver-*.whl --reinstall
 # ============================================================
 FROM python:3.13-slim
 
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /workspace/apps/api/.venv /app/.venv
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
