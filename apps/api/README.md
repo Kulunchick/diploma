@@ -100,22 +100,17 @@ docker build -t <REGISTRY>/operations:latest .
 docker push <REGISTRY>/operations:latest
 ```
 
-Update the `image:` field in `k8s/api-deployment.yaml` and
-`k8s/worker-deployment.yaml` with your actual registry and tag.
-
 ### 4. Configure
 
-Edit `k8s/configmap.yaml` if your Temporal/Redis service names differ.
+Edit `deploy/charts/backend/values.yaml` and `deploy/charts/worker/values.yaml`
+if your Temporal/Redis service names differ.
 
-### 5. Apply manifests
+### 5. Deploy via Helm
 
 ```bash
 # from repo root
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/api-deployment.yaml
-kubectl apply -f k8s/api-service.yaml
-kubectl apply -f k8s/worker-deployment.yaml
-kubectl apply -f k8s/worker-hpa.yaml
+helm install backend deploy/charts/backend
+helm install worker  deploy/charts/worker
 ```
 
 ### 6. Verify

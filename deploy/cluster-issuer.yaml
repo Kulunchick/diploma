@@ -4,7 +4,7 @@
 # Does NOT belong to a specific namespace — cluster-scoped resource.
 #
 # Usage:
-#   kubectl apply -f k8s/cluster-issuer.yaml
+#   kubectl apply -f deploy/cluster-issuer.yaml
 #
 # Verify:
 #   kubectl get clusterissuer letsencrypt-prod -o jsonpath='{.status.conditions}'

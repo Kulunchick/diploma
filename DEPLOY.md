@@ -44,16 +44,12 @@ before applying the Ingress (cert-manager needs HTTP-01 challenge to succeed).
 
 ## Before First Deploy
 
-1. **Fill in TODOs** in the manifests:
+1. **Fill in TODOs** in the chart values and cluster manifest:
 
    | File | TODO |
    |---|---|
-   | `k8s/frontend-ingress.yaml` | Replace `TODO_YOUR_DOMAIN` with your domain (2 places) |
-   | `k8s/cluster-issuer.yaml` | Replace `TODO_YOUR_EMAIL` with your email |
-   | `k8s/frontend-deployment.yaml` | Replace `<REGISTRY>/ui:latest` with your image (2 places: initContainer + main container) |
-   | `k8s/api-deployment.yaml` | Replace `<REGISTRY>/operations:latest` |
-   | `k8s/worker-deployment.yaml` | Same |
-   | `deploy/charts/*/values.yaml` | Replace `TODO_YOUR_DOMAIN` in frontend chart ingress section |
+   | `deploy/cluster-issuer.yaml` | Replace `TODO_YOUR_EMAIL` with your email |
+   | `deploy/charts/frontend/values.yaml` | Replace `TODO_YOUR_DOMAIN` in `ingress.host` |
 
 2. **Build and push the images:**
 
@@ -69,30 +65,32 @@ before applying the Ingress (cert-manager needs HTTP-01 challenge to succeed).
 
 ---
 
-## Apply Order
+## Deploy
 
-Apply in this order — dependencies must exist before dependents.
+### First deploy
 
 ```bash
 # 1. Cluster-scoped resources (once per cluster, requires cert-manager CRDs)
-kubectl apply -f k8s/cluster-issuer.yaml
+kubectl apply -f deploy/cluster-issuer.yaml
 
-# 2. Backend infrastructure config
-kubectl apply -f k8s/configmap.yaml
+# 2–4. Install Helm charts (order matters: backend before worker before frontend)
+helm install backend  deploy/charts/backend
+helm install worker   deploy/charts/worker
+helm install frontend deploy/charts/frontend
+```
 
-# 3. Backend services
-kubectl apply -f k8s/api-deployment.yaml
-kubectl apply -f k8s/api-service.yaml
-kubectl apply -f k8s/worker-deployment.yaml
-kubectl apply -f k8s/worker-hpa.yaml
+### Upgrade (subsequent deploys)
 
-# 4. Frontend
-kubectl apply -f k8s/frontend-configmap.yaml
-kubectl apply -f k8s/frontend-deployment.yaml
-kubectl apply -f k8s/frontend-service.yaml
+```bash
+helm upgrade backend  deploy/charts/backend
+helm upgrade worker   deploy/charts/worker
+helm upgrade frontend deploy/charts/frontend
+```
 
-# 5. Ingress (last — backend and frontend services must exist first)
-kubectl apply -f k8s/frontend-ingress.yaml
+Or upgrade only the changed chart:
+
+```bash
+helm upgrade frontend deploy/charts/frontend --reuse-values
 ```
 
 ### Verify
@@ -106,7 +104,7 @@ kubectl get certificate
 kubectl describe certificate tls
 
 # Ingress has an address
-kubectl get ingress ingress
+kubectl get ingress
 
 # Smoke test
 curl -si https://YOUR_DOMAIN/
@@ -261,8 +259,7 @@ The `imagePullSecrets` field is already present (commented out) in all three
 
 ## Runtime Config Changes (no image rebuild)
 
-All environment-specific settings live in `k8s/frontend-configmap.yaml`
-(flat manifests) or `deploy/charts/*/values.yaml` (Helm charts).
+All environment-specific settings live in `deploy/charts/*/values.yaml`.
 
 ### Roll back USE_TEMPORAL_API via Helm chart
 
@@ -383,15 +380,8 @@ these values increased.
 ## Teardown
 
 ```bash
-kubectl delete -f k8s/frontend-ingress.yaml
-kubectl delete -f k8s/frontend-service.yaml
-kubectl delete -f k8s/frontend-deployment.yaml
-kubectl delete -f k8s/frontend-configmap.yaml
-kubectl delete -f k8s/api-service.yaml
-kubectl delete -f k8s/api-deployment.yaml
-kubectl delete -f k8s/worker-deployment.yaml
-kubectl delete -f k8s/worker-hpa.yaml
-kubectl delete -f k8s/configmap.yaml
+helm uninstall frontend backend worker
+
 # ClusterIssuer is cluster-scoped — delete manually if no longer needed:
-# kubectl delete clusterissuer letsencrypt-prod
+kubectl delete -f deploy/cluster-issuer.yaml
 ```
