@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from redis.asyncio import Redis
 from temporalio.client import Client
@@ -14,16 +15,29 @@ from worker.config import REDIS_URL, TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPA
 from worker.workflows.experiment import ExperimentWorkflow
 from worker.workflows.solve import SolveWorkflow
 
+logger = logging.getLogger(__name__)
+
+
+async def _connect_temporal() -> Client:
+    for attempt in range(1, 31):
+        try:
+            return await Client.connect(
+                TEMPORAL_HOST,
+                namespace=TEMPORAL_NAMESPACE,
+                data_converter=pydantic_data_converter,
+            )
+        except Exception as exc:
+            if attempt == 30:
+                raise
+            logger.warning("Temporal not ready (attempt %d/30): %s — retrying in 5s", attempt, exc)
+            await asyncio.sleep(5)
+
 
 async def main() -> None:
     redis = Redis.from_url(REDIS_URL, decode_responses=True)
     set_redis_client(redis)
 
-    client = await Client.connect(
-        TEMPORAL_HOST,
-        namespace=TEMPORAL_NAMESPACE,
-        data_converter=pydantic_data_converter,
-    )
+    client = await _connect_temporal()
 
     worker = Worker(
         client,

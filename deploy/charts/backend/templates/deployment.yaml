@@ -34,15 +34,23 @@ spec:
               value: "1"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          # startupProbe gates liveness/readiness until the app is up.
+          # Temporal retry in lifespan can take up to 150 s (30 * 5 s).
+          startupProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             httpGet:
               path: /docs
               port: 8000
-            initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /docs
               port: 8000
-            initialDelaySeconds: 15
             periodSeconds: 20
+            failureThreshold: 3
