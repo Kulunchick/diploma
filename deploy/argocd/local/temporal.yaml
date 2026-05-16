@@ -39,12 +39,6 @@ spec:
                     password: temporal
                     createDatabase: true
                     manageSchema: true
-        prometheus:
-          enabled: false
-        grafana:
-          enabled: false
-        elasticsearch:
-          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: temporal
