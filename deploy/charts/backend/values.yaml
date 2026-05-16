@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/kulunchick/diploma-backend
   # tag is set by CI write-back on every deploy (git SHA)
-  tag: 980fba29
+  tag: b9c0a456
   pullPolicy: IfNotPresent
 
 replicaCount: 1
