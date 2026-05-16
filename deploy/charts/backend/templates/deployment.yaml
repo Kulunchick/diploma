@@ -20,7 +20,7 @@ spec:
       {{- end }}
       initContainers:
         - name: wait-temporal
-          image: busybox:1.28
+          image: busybox:stable
           command:
             - sh
             - -c
