@@ -1,5 +1,3 @@
-import asyncio
-import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -12,27 +10,14 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from src.operations.routers import experiments, jobs, solve
 from src.operations.temporal_types import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 
-logger = logging.getLogger(__name__)
-
-
-async def _connect_temporal() -> Client:
-    for attempt in range(1, 31):
-        try:
-            return await Client.connect(
-                TEMPORAL_HOST,
-                namespace=TEMPORAL_NAMESPACE,
-                data_converter=pydantic_data_converter,
-            )
-        except Exception as exc:
-            if attempt == 30:
-                raise
-            logger.warning("Temporal not ready (attempt %d/30): %s — retrying in 5s", attempt, exc)
-            await asyncio.sleep(5)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.temporal = await _connect_temporal()
+    app.state.temporal = await Client.connect(
+        TEMPORAL_HOST,
+        namespace=TEMPORAL_NAMESPACE,
+        data_converter=pydantic_data_converter,
+    )
     app.state.redis = Redis.from_url(REDIS_URL, decode_responses=True)
     yield
     await app.state.redis.aclose()

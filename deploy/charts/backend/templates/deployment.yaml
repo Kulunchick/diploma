@@ -18,6 +18,21 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+        - name: wait-temporal
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z \
+                $(echo $TEMPORAL_HOST | cut -d: -f1) \
+                $(echo $TEMPORAL_HOST | cut -d: -f2); do
+                echo "waiting for temporal at $TEMPORAL_HOST..."; sleep 2
+              done
+          envFrom:
+            - configMapRef:
+                name: {{ include "backend.fullname" . }}-config
       containers:
         - name: backend
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -34,23 +49,15 @@ spec:
               value: "1"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          # startupProbe gates liveness/readiness until the app is up.
-          # Temporal retry in lifespan can take up to 150 s (30 * 5 s).
-          startupProbe:
-            httpGet:
-              path: /docs
-              port: 8000
-            failureThreshold: 30
-            periodSeconds: 5
           readinessProbe:
             httpGet:
               path: /docs
               port: 8000
+            initialDelaySeconds: 5
             periodSeconds: 10
-            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /docs
               port: 8000
+            initialDelaySeconds: 15
             periodSeconds: 20
-            failureThreshold: 3
