@@ -138,13 +138,17 @@ jobs:
           maturin build --release --interpreter python3.13
         working-directory: libs/operations
 
-      - name: Worker — install + pytest
+      - name: Worker — install
         if: matrix.changed == 'true' && matrix.component == 'worker'
         run: |
-          pip install -e ".[dev]"
-          pip install ../libs/operations/target/wheels/assignment_solver-*.whl \
+          pip install libs/shared/
+          pip install -e "apps/worker/[dev]"
+          pip install libs/operations/target/wheels/assignment_solver-*.whl \
               --force-reinstall --no-deps
-          pytest tests/ -q
+
+      - name: Worker — pytest
+        if: matrix.changed == 'true' && matrix.component == 'worker'
+        run: pytest tests/ -q
         working-directory: apps/worker
 
   # ──────────────────────────────────────────────────────────────────────────
