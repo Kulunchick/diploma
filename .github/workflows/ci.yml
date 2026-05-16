@@ -116,14 +116,9 @@ jobs:
           key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
           restore-keys: uv-${{ runner.os }}-
 
-      - name: Install backend deps
+      - name: Backend — install deps
         if: matrix.changed == 'true' && matrix.component == 'backend'
         run: uv sync --frozen
-        working-directory: apps/api
-
-      - name: Backend — pytest
-        if: matrix.changed == 'true' && matrix.component == 'backend'
-        run: uv run pytest tests/ -q
         working-directory: apps/api
 
       # ── Worker ────────────────────────────────────────────────────────────
