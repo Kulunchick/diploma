@@ -7,6 +7,7 @@ from shared.types import (  # noqa: F401 — re-exported for worker modules
     ExperimentInput,
     ExperimentResult,
     ProbabilisticParams,
+    SingleSolveInput,
     SolveInput,
     SolveResult,
 )
@@ -42,3 +43,11 @@ class GenerateRunsInput(BaseModel):
 class ExperimentVariantInput(BaseModel):
     """Reference to one variant stored in Redis by the generator activity."""
     index: int
+
+
+class PersistFormationInput(BaseModel):
+    """Workflow → activity payload for writing a formation result to Postgres.
+    The solution matrix indexes into the scenario's frozen snapshot orders."""
+    scenario_id: str
+    solution: list[list[int]]
+    value: float

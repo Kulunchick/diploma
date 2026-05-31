@@ -11,6 +11,7 @@ from src.operations.db.migrations import run_migrations
 from src.operations.routers import (
     auth,
     experiments,
+    formations,
     jobs,
     planning,
     providers,
@@ -61,6 +62,7 @@ app.include_router(services.router, prefix="/api")
 app.include_router(service_groups.router, prefix="/api")
 app.include_router(providers.router, prefix="/api")
 app.include_router(planning.router, prefix="/api")
+app.include_router(formations.router, prefix="/api")
 
 
 if __name__ == "__main__":

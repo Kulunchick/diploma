@@ -42,6 +42,26 @@ class SolveResult(BaseModel):
     probabilistic: AlgorithmResult
 
 
+class SingleSolveInput(BaseModel):
+    """Input for SingleAlgorithmWorkflow — runs exactly one algorithm and
+    persists the result back to Postgres for a formation scenario.
+
+    Mirrors SolveInput but selects a single algorithm and carries the
+    scenario_id so the worker can write assignments/value back to the DB.
+    """
+    m: int
+    n: int
+    c: list[list[int]]
+    b_ij: list[list[int]]
+    b_total: int
+    omega: list[list[float]]
+    algorithm: str  # "ant_colony" | "probabilistic"
+    ant_colony: AntColonyParams = AntColonyParams()
+    probabilistic: ProbabilisticParams = ProbabilisticParams()
+    scenario_id: str
+    redis_channel: str | None = None
+
+
 class ExperimentInput(BaseModel):
     experiment_type: str
     params: dict

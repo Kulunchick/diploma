@@ -10,12 +10,15 @@ from assignment_solver import (
     Task as RustTask,
 )
 from redis.asyncio import Redis
+from sqlalchemy import text
 from temporalio import activity
 
+from worker.db import AsyncSessionLocal
 from worker.types import (
     AntColonyParams,
     ExperimentVariantInput,
     GenerateRunsInput,
+    PersistFormationInput,
     ProbabilisticParams,
     RunAlgorithmInput,
     RunResult,
@@ -172,6 +175,80 @@ async def generate_experiment_runs_activity(input: GenerateRunsInput) -> int:
     await _redis.set(key, json.dumps([r.model_dump() for r in runs]), ex=86400)
 
     return len(runs)
+
+
+def _maybe_json(value):
+    """JSONB columns come back as str from asyncpg over a raw text() query."""
+    return json.loads(value) if isinstance(value, str) else value
+
+
+@activity.defn
+async def persist_formation_result_activity(input: PersistFormationInput) -> None:
+    """Write a finished formation back to Postgres: one assignment row per
+    selected (service, provider) pair plus the scenario value/status.
+
+    Resolved numbers (price, discount, effective_revenue) are taken from the
+    frozen snapshot so totals reconcile with the solver's value
+    (F = ΣΣ (1 - r_ij)·d_ij·v_ij) and stay reproducible if the catalogue
+    changes later. Idempotent: clears prior assignments before inserting.
+    """
+    async with AsyncSessionLocal() as session:
+        snap = (
+            await session.execute(
+                text(
+                    "SELECT input_payload, service_order, provider_order "
+                    "FROM formation_snapshots WHERE scenario_id = CAST(:sid AS uuid)"
+                ),
+                {"sid": input.scenario_id},
+            )
+        ).one_or_none()
+        if snap is None:
+            raise RuntimeError(f"Snapshot not found for scenario {input.scenario_id}")
+
+        payload = _maybe_json(snap[0])
+        service_order = _maybe_json(snap[1])
+        provider_order = _maybe_json(snap[2])
+        c = payload["c"]
+        omega = payload["omega"]
+
+        await session.execute(
+            text("DELETE FROM formation_assignments WHERE scenario_id = CAST(:sid AS uuid)"),
+            {"sid": input.scenario_id},
+        )
+
+        for i, row in enumerate(input.solution):
+            for j, v in enumerate(row):
+                if v != 1:
+                    continue
+                price = float(c[i][j])
+                discount = float(omega[i][j])
+                effective_revenue = (1.0 - discount) * price
+                await session.execute(
+                    text(
+                        "INSERT INTO formation_assignments "
+                        "(scenario_id, service_id, provider_id, price, discount, effective_revenue) "
+                        "VALUES (CAST(:sid AS uuid), CAST(:svc AS uuid), CAST(:prov AS uuid), "
+                        ":price, :discount, :eff)"
+                    ),
+                    {
+                        "sid": input.scenario_id,
+                        "svc": service_order[i],
+                        "prov": provider_order[j],
+                        "price": price,
+                        "discount": discount,
+                        "eff": effective_revenue,
+                    },
+                )
+
+        await session.execute(
+            text(
+                "UPDATE formation_scenarios "
+                "SET status = 'completed', value = :val, finished_at = now() "
+                "WHERE id = CAST(:sid AS uuid)"
+            ),
+            {"val": input.value, "sid": input.scenario_id},
+        )
+        await session.commit()
 
 
 async def _async_heartbeat(data: dict) -> None:
