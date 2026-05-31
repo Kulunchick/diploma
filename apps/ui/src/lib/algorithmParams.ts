@@ -1,14 +1,15 @@
 /**
  * Human-readable labels + ordering for the algorithm parameter sets stored on a
  * formation scenario (`params`). Keys match what the API persists
- * (AntColonyParameters / ProbabilisticParameters): Kmax, num_ants, alpha, beta,
- * p, tau. Unknown keys fall back to the raw key so future params still render.
+ * (AntColony/Probabilistic/CombinedParameters). Unknown keys fall back to the
+ * raw key so future params still render.
  */
 import type { FormationAlgorithm } from '@/api/types';
 
 export const ALGO_LABEL: Record<FormationAlgorithm, string> = {
   probabilistic: 'Ймовірнісно-жадібний',
   ant_colony: 'Мурашиних колоній',
+  combined: 'Комбінований метод',
 };
 
 const PARAM_LABELS: Record<FormationAlgorithm, Record<string, string>> = {
@@ -23,20 +24,28 @@ const PARAM_LABELS: Record<FormationAlgorithm, Record<string, string>> = {
     p: 'ρ (коефіцієнт випаровування)',
     tau: 'τ₀ (початковий рівень феромону)',
   },
+  combined: {
+    kmax_subproblem: 'K_max підзадач',
+    discount_step: 'Крок знижки',
+    ignore_discounts: 'Ігнорувати межу знижок',
+    local_search_restarts: 'Додаткові рестарти',
+  },
 };
 
 // Stable display order per algorithm; keys not listed here are appended after.
 const PARAM_ORDER: Record<FormationAlgorithm, string[]> = {
   probabilistic: ['Kmax'],
   ant_colony: ['Kmax', 'num_ants', 'alpha', 'beta', 'p', 'tau'],
+  combined: ['kmax_subproblem', 'discount_step', 'ignore_discounts', 'local_search_restarts'],
 };
 
 export function paramLabel(algorithm: FormationAlgorithm, key: string): string {
   return PARAM_LABELS[algorithm]?.[key] ?? key;
 }
 
-/** Integers as-is; floats with up to 2 decimals, trailing zeros stripped. */
-export function formatParamValue(value: number): string {
+/** Booleans → Так/Ні; integers as-is; floats to ≤2 decimals, trailing zeros stripped. */
+export function formatParamValue(value: number | boolean): string {
+  if (typeof value === 'boolean') return value ? 'Так' : 'Ні';
   if (Number.isInteger(value)) return String(value);
   return String(Number(value.toFixed(2)));
 }
@@ -44,14 +53,14 @@ export function formatParamValue(value: number): string {
 export interface ParamRow {
   key: string;
   label: string;
-  value: number;
+  value: number | boolean;
 }
 
 /** Ordered (label, value) rows for a scenario's params: known keys first in the
  * canonical order, then any unknown keys (raw label) for forward compatibility. */
 export function orderedParams(
   algorithm: FormationAlgorithm,
-  params: Record<string, number>,
+  params: Record<string, number | boolean>,
 ): ParamRow[] {
   const known = PARAM_ORDER[algorithm] ?? [];
   const seen = new Set<string>();

@@ -7,6 +7,7 @@ import { createFormation, listFormations } from '@/api/formations';
 import type { FormationAlgorithm } from '@/api/types';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
+import { Checkbox } from '@/components/ui/checkbox.tsx';
 import {
   Dialog,
   DialogContent,
@@ -26,11 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table.tsx';
 import StatusBadge from '@/components/StatusBadge.tsx';
-
-const ALGO_LABEL: Record<FormationAlgorithm, string> = {
-  probabilistic: 'Ймовірнісно-жадібний',
-  ant_colony: 'Мурашиних колоній',
-};
+import { ALGO_LABEL } from '@/lib/algorithmParams';
 
 function NumberField({
   label,
@@ -46,7 +43,12 @@ function NumberField({
   return (
     <div className="flex flex-col gap-1">
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input type="number" step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <Input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
     </div>
   );
 }
@@ -54,11 +56,9 @@ function NumberField({
 export default function Formations() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-
   const { data: formations = [], isLoading } = useQuery({
     queryKey: ['formations'],
     queryFn: listFormations,
-    // Keep polling while anything is still in flight.
     refetchInterval: (query) =>
       (query.state.data ?? []).some((f) => f.status === 'pending' || f.status === 'running')
         ? 2000
@@ -71,15 +71,22 @@ export default function Formations() {
   const [algorithm, setAlgorithm] = useState<FormationAlgorithm>('probabilistic');
   const [ant, setAnt] = useState({ Kmax: 100, num_ants: 20, alpha: 1, beta: 2, p: 0.1, tau: 1 });
   const [prob, setProb] = useState({ Kmax: 100 });
+  const [combined, setCombined] = useState({
+    kmax_subproblem: 100,
+    discount_step: 0.05,
+    ignore_discounts: false,
+    local_search_restarts: 0,
+  });
+
+  const paramsFor = (algo: FormationAlgorithm): Record<string, number | boolean> => {
+    if (algo === 'ant_colony') return { ...ant };
+    if (algo === 'combined') return { ...combined };
+    return { Kmax: prob.Kmax };
+  };
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createFormation({
-        name,
-        b_total: bTotal,
-        algorithm,
-        params: algorithm === 'ant_colony' ? ant : { Kmax: prob.Kmax },
-      }),
+      createFormation({ name, b_total: bTotal, algorithm, params: paramsFor(algorithm) }),
     onSuccess: (scenario) => {
       toast.success('Формування запущено');
       setOpen(false);
@@ -173,6 +180,10 @@ export default function Formations() {
                   <RadioGroupItem value="ant_colony" />
                   <span className="text-sm">Мурашиних колоній</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="combined" />
+                  <span className="text-sm">Комбінований метод</span>
+                </label>
               </RadioGroup>
               <p className="text-xs text-muted-foreground">
                 Сервіси, об'єднані у групу, формують пакет за принципом «усе або нічого»:
@@ -180,11 +191,13 @@ export default function Formations() {
               </p>
             </div>
 
-            {algorithm === 'probabilistic' ? (
+            {algorithm === 'probabilistic' && (
               <div className="grid grid-cols-2 gap-2">
                 <NumberField label="Kmax" value={prob.Kmax} onChange={(v) => setProb({ Kmax: v })} />
               </div>
-            ) : (
+            )}
+
+            {algorithm === 'ant_colony' && (
               <div className="grid grid-cols-3 gap-2">
                 <NumberField label="Kmax" value={ant.Kmax} onChange={(v) => setAnt({ ...ant, Kmax: v })} />
                 <NumberField label="L (мурахи)" value={ant.num_ants} onChange={(v) => setAnt({ ...ant, num_ants: v })} />
@@ -192,6 +205,40 @@ export default function Formations() {
                 <NumberField label="β" step={0.1} value={ant.beta} onChange={(v) => setAnt({ ...ant, beta: v })} />
                 <NumberField label="ρ" step={0.1} value={ant.p} onChange={(v) => setAnt({ ...ant, p: v })} />
                 <NumberField label="τ₀" step={0.1} value={ant.tau} onChange={(v) => setAnt({ ...ant, tau: v })} />
+              </div>
+            )}
+
+            {algorithm === 'combined' && (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <NumberField
+                    label="K_max підзадач"
+                    value={combined.kmax_subproblem}
+                    onChange={(v) => setCombined({ ...combined, kmax_subproblem: v })}
+                  />
+                  <NumberField
+                    label="Крок знижки"
+                    step={0.01}
+                    value={combined.discount_step}
+                    onChange={(v) => setCombined({ ...combined, discount_step: v })}
+                  />
+                  <NumberField
+                    label="Додаткові рестарти"
+                    value={combined.local_search_restarts}
+                    onChange={(v) => setCombined({ ...combined, local_search_restarts: v })}
+                  />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={combined.ignore_discounts}
+                    onCheckedChange={(c) =>
+                      setCombined({ ...combined, ignore_discounts: c === true })
+                    }
+                  />
+                  <span className="text-sm">
+                    Ігнорувати верхню межу знижок (рахувати від 0 до 1)
+                  </span>
+                </label>
               </div>
             )}
           </div>

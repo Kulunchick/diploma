@@ -306,9 +306,15 @@ export interface PlanningCell {
   resource: number;
   provider_revenue: number;
   discount: number;
+  min_value: number;
 }
 
-export type PlanningField = 'price' | 'resource' | 'provider_revenue' | 'discount';
+export type PlanningField =
+  | 'price'
+  | 'resource'
+  | 'provider_revenue'
+  | 'discount'
+  | 'min_value';
 
 export interface PlanningCellUpsert {
   service_id: string;
@@ -317,9 +323,10 @@ export interface PlanningCellUpsert {
   resource: number;
   provider_revenue: number;
   discount: number;
+  min_value: number;
 }
 
-export type FormationAlgorithm = 'probabilistic' | 'ant_colony';
+export type FormationAlgorithm = 'probabilistic' | 'ant_colony' | 'combined';
 export type FormationStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface FormationListItem {
@@ -335,7 +342,7 @@ export interface FormationCreate {
   name: string;
   b_total: number;
   algorithm: FormationAlgorithm;
-  params: Record<string, number>;
+  params: Record<string, number | boolean>;
 }
 
 export interface FormationAssignment {
@@ -349,6 +356,8 @@ export interface FormationAssignment {
   resource_used: number;
   /** Set when the service was assigned as part of a group (all-or-nothing). */
   group_name: string | null;
+  /** The discount actually applied (negotiated for combined; = discount else). */
+  final_discount: number | null;
 }
 
 export interface FormationTotals {
@@ -364,8 +373,12 @@ export interface FormationDetail {
   algorithm: FormationAlgorithm;
   status: FormationStatus;
   value: number | null;
+  /** Combined-method only: F_prov, winning candidate, and value + provider_value. */
+  provider_value: number | null;
+  combined_source: string | null;
+  combined_benefit: number | null;
   b_total: number;
-  params: Record<string, number>;
+  params: Record<string, number | boolean>;
   workflow_id: string | null;
   error: string | null;
   created_at: string;
@@ -387,8 +400,10 @@ export interface CompareScenario {
   algorithm: FormationAlgorithm;
   status: FormationStatus;
   value: number | null;
+  provider_value: number | null;
+  combined_benefit: number | null;
   b_total: number;
-  params: Record<string, number>;
+  params: Record<string, number | boolean>;
   total_revenue: number;
   total_resource_used: number;
   per_provider: CompareProviderBreakdown[];

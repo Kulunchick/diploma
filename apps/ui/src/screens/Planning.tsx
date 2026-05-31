@@ -15,13 +15,20 @@ import PlanningMatrix, {
 
 type CellValues = Omit<PlanningCellUpsert, 'service_id' | 'provider_id'>;
 
-const EMPTY: CellValues = { price: 0, resource: 0, provider_revenue: 0, discount: 0 };
+const EMPTY: CellValues = {
+  price: 0,
+  resource: 0,
+  provider_revenue: 0,
+  discount: 0,
+  min_value: 0,
+};
 
 const TABS: { field: PlanningField; label: string }[] = [
   { field: 'price', label: 'Преференційні ціни' },
   { field: 'resource', label: 'Ресурси' },
   { field: 'provider_revenue', label: 'Дохід провайдера' },
   { field: 'discount', label: 'Знижки' },
+  { field: 'min_value', label: 'Мін. відносна цінність (s_ij)' },
 ];
 
 const DEBOUNCE_MS = 400;
@@ -31,7 +38,7 @@ export default function Planning() {
   const { data: providers = [] } = useQuery({ queryKey: ['providers'], queryFn: listProviders });
   const { data: cells, isLoading } = useQuery({ queryKey: ['planning'], queryFn: listPlanning });
 
-  // Local cell store keyed by "serviceId:providerId" — holds all four fields
+  // Local cell store keyed by "serviceId:providerId" — holds all fields
   // so a single-field edit can PUT the whole cell.
   const [values, setValues] = useState<Map<string, CellValues>>(new Map());
   const [states, setStates] = useState<Map<string, CellSaveState>>(new Map());
@@ -46,6 +53,7 @@ export default function Planning() {
         resource: c.resource,
         provider_revenue: c.provider_revenue,
         discount: c.discount,
+        min_value: c.min_value,
       });
     }
     setValues(next);
@@ -111,6 +119,10 @@ export default function Planning() {
                 </TabsTrigger>
               ))}
             </TabsList>
+            <p className="mt-2 text-sm text-muted-foreground">
+              «Мін. відносна цінність» (s_ij) використовується лише комбінованим методом.
+              Залиште 0, якщо не застосовуєте обмеження відносної цінності.
+            </p>
             {TABS.map((t) => (
               <TabsContent key={t.field} value={t.field}>
                 <PlanningMatrix

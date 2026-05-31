@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import {
@@ -9,26 +8,16 @@ import {
   exportJson,
   getFormation,
   getIterations,
-  listFormations,
 } from '@/api/formations';
-import type { FormationAssignment } from '@/api/types';
-import IterationChart, { ALGO_COLOR } from '@/components/IterationChart.tsx';
+import type { FormationDetail as FormationDetailType } from '@/api/types';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
-import { Checkbox } from '@/components/ui/checkbox.tsx';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible.tsx';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog.tsx';
 import {
   Table,
   TableBody,
@@ -37,274 +26,212 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.tsx';
+import IterationChart from '@/components/IterationChart.tsx';
 import StatusBadge from '@/components/StatusBadge.tsx';
 import { ALGO_LABEL, formatParamValue, orderedParams } from '@/lib/algorithmParams';
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
-    </div>
-  );
-}
+const POLL_MS = 1500;
+
+const COMBINED_SOURCE_LABEL: Record<string, string> = {
+  subtask_a_improved: 'Покращено з підзадачі ІТ-компанії',
+  subtask_b_improved: 'Покращено з підзадачі провайдерів',
+};
+
+const fmt = (n: number) => Math.round(n).toLocaleString('uk');
 
 export default function FormationDetail() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
+  const [paramsOpen, setParamsOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['formation', id],
     queryFn: () => getFormation(id),
-    enabled: !!id,
     refetchInterval: (query) => {
       const s = query.state.data?.status;
-      return s === 'pending' || s === 'running' ? 1500 : false;
+      return s === 'pending' || s === 'running' ? POLL_MS : false;
     },
   });
 
-  const { data: allFormations = [] } = useQuery({ queryKey: ['formations'], queryFn: listFormations });
-
-  const running = data?.status === 'pending' || data?.status === 'running';
-
-  // Convergence history: live from Redis while running, canonical from Postgres
-  // once finished. Refetch once more when status flips to terminal.
-  const itersQuery = useQuery({
-    queryKey: ['iterations', id],
+  const { data: iterations = [] } = useQuery({
+    queryKey: ['formation', id, 'iterations'],
     queryFn: () => getIterations(id),
-    enabled: !!id,
-    refetchInterval: () => (running ? 1200 : false),
+    enabled: !!data && (data.status === 'completed' || data.status === 'failed'),
   });
-  useEffect(() => {
-    if (data?.status === 'completed' || data?.status === 'failed') {
-      void itersQuery.refetch();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.status]);
 
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [paramsOpen, setParamsOpen] = useState(false);
-
-  // Group assignments by provider for display.
-  const grouped = useMemo(() => {
-    const map = new Map<string, FormationAssignment[]>();
-    for (const a of data?.assignments ?? []) {
-      const arr = map.get(a.provider_name) ?? [];
-      arr.push(a);
-      map.set(a.provider_name, arr);
-    }
-    return [...map.entries()];
-  }, [data]);
-
-  const download = (fn: (id: string) => Promise<void>) =>
-    fn(id).catch((e) => toast.error(e instanceof Error ? e.message : 'Помилка експорту'));
+  const totalsMemo = useMemo(() => data?.totals, [data]);
 
   if (isLoading || !data) {
-    return <p className="p-4 text-muted-foreground">Завантаження…</p>;
+    return <p className="text-muted-foreground">Завантаження…</p>;
   }
 
-  const fmt = (n: number) => Math.round(n).toLocaleString('uk');
+  const d: FormationDetailType = data;
+  const isCombined = d.algorithm === 'combined';
+
+  const handleExport = async (kind: 'json' | 'csv') => {
+    try {
+      if (kind === 'json') await exportJson(id);
+      else await exportCsv(id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Помилка експорту');
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between">
-          <div className="flex flex-col gap-1">
-            <CardTitle className="flex items-center gap-3">
-              {data.name}
-              <StatusBadge status={data.status} />
-            </CardTitle>
-            <span className="text-sm text-muted-foreground">
-              Алгоритм: {ALGO_LABEL[data.algorithm] ?? data.algorithm} · T = {fmt(data.b_total)}
-            </span>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>{d.name}</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              {ALGO_LABEL[d.algorithm]} · <StatusBadge status={d.status} />
+            </p>
+            {isCombined && d.combined_source && (
+              <Badge variant="secondary" className="mt-2">
+                {COMBINED_SOURCE_LABEL[d.combined_source] ?? d.combined_source}
+              </Badge>
+            )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => download(exportJson)}>
-              Експорт JSON
-            </Button>
-            <Button variant="outline" onClick={() => download(exportCsv)}>
-              Експорт CSV
-            </Button>
-            <Button
-              onClick={() => {
-                setSelected(new Set());
-                setCompareOpen(true);
-              }}
-            >
-              Порівняти зі сценарієм…
-            </Button>
+            <Button variant="outline" onClick={() => handleExport('json')}>Експорт JSON</Button>
+            <Button variant="outline" onClick={() => handleExport('csv')}>Експорт CSV</Button>
           </div>
         </CardHeader>
-        <CardContent>
-          {data.status === 'failed' && (
-            <p className="text-destructive mb-4">Помилка: {data.error ?? 'невідома'}</p>
-          )}
-          {data.status === 'pending' || data.status === 'running' ? (
-            <p className="text-muted-foreground">Триває обчислення…</p>
+        <CardContent className="flex flex-col gap-4">
+          {d.error && <p className="text-destructive text-sm">{d.error}</p>}
+
+          {isCombined ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <Stat label="Дохід IT-компанії (F_IT)" value={d.value != null ? fmt(d.value) : '—'} />
+              <Stat label="Дохід провайдерів (F_prov)" value={d.provider_value != null ? fmt(d.provider_value) : '—'} />
+              <Stat label="Сумарна вигода (F_IT + F_prov)" value={d.combined_benefit != null ? fmt(d.combined_benefit) : '—'} />
+              <Stat label="Викор. ресурс" value={totalsMemo ? fmt(totalsMemo.total_resource_used) : '—'} />
+              <Stat label="Провайдерів" value={String(totalsMemo?.provider_count ?? 0)} />
+              <Stat label="Сервісів" value={String(totalsMemo?.service_count ?? 0)} />
+            </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <Stat label="Дохід IT-компанії (F)" value={data.value != null ? fmt(data.value) : '—'} />
-              <Stat label="Загальний дохід" value={fmt(data.totals.total_revenue)} />
-              <Stat label="Використано ресурсу" value={fmt(data.totals.total_resource_used)} />
-              <Stat label="Провайдерів" value={String(data.totals.provider_count)} />
-              <Stat label="Сервісів" value={String(data.totals.service_count)} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Stat label="Дохід IT-компанії (F)" value={d.value != null ? fmt(d.value) : '—'} />
+              <Stat label="Викор. ресурс" value={totalsMemo ? fmt(totalsMemo.total_resource_used) : '—'} />
+              <Stat label="Провайдерів" value={String(totalsMemo?.provider_count ?? 0)} />
+              <Stat label="Сервісів" value={String(totalsMemo?.service_count ?? 0)} />
             </div>
           )}
+          <div className="text-sm text-muted-foreground">Загальний ресурс T = {fmt(d.b_total)}</div>
         </CardContent>
       </Card>
 
-      <Card>
-        <Collapsible open={paramsOpen} onOpenChange={setParamsOpen}>
-          <CollapsibleTrigger className="w-full flex items-center justify-between px-6 py-4 text-left">
-            <span className="font-semibold flex items-center gap-2">
-              Параметри алгоритму
-              {!paramsOpen && (
-                <span className="text-sm font-normal text-muted-foreground">
-                  · T = {fmt(data.b_total)}
-                </span>
-              )}
-            </span>
-            <ChevronDown
-              className={`h-4 w-4 shrink-0 transition-transform ${paramsOpen ? 'rotate-180' : ''}`}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="px-6 pb-4">
-              <dl className="grid grid-cols-[max-content_1fr] gap-x-8 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">T (загальний ресурс)</dt>
-                <dd className="font-medium">{fmt(data.b_total)}</dd>
-                {orderedParams(data.algorithm, data.params).map((p) => (
-                  <div key={p.key} className="contents">
-                    <dt className="text-muted-foreground">{p.label}</dt>
-                    <dd className="font-medium">{formatParamValue(p.value)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Збіжність алгоритму</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {(() => {
-            const iters = itersQuery.data ?? [];
-            if (iters.length > 0) {
-              return (
-                <IterationChart
-                  series={[
-                    {
-                      name: ALGO_LABEL[data.algorithm] ?? data.algorithm,
-                      color: ALGO_COLOR[data.algorithm],
-                      data: iters.map((i) => ({ iteration: i.iteration, value: i.best_value })),
-                    },
-                  ]}
-                />
-              );
-            }
-            return (
-              <p className="text-muted-foreground">
-                {running
-                  ? 'Очікування ітерацій…'
-                  : 'Історія ітерацій недоступна для цього сценарію.'}
-              </p>
-            );
-          })()}
-        </CardContent>
-      </Card>
-
-      {data.assignments.length > 0 && (
+      <Collapsible open={paramsOpen} onOpenChange={setParamsOpen}>
         <Card>
           <CardHeader>
-            <CardTitle>Призначення за провайдерами</CardTitle>
+            <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium">
+              Параметри алгоритму
+              <span className="text-muted-foreground">· T = {fmt(d.b_total)}</span>
+              <span className="ml-auto text-muted-foreground">{paramsOpen ? '▾' : '▸'}</span>
+            </CollapsibleTrigger>
           </CardHeader>
-          <CardContent className="flex flex-col gap-6">
-            {grouped.map(([provider, rows]) => (
-              <div key={provider}>
-                <h3 className="font-medium mb-2">{provider}</h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Сервіс</TableHead>
-                      <TableHead>Ціна</TableHead>
-                      <TableHead>Знижка</TableHead>
-                      <TableHead>Дохід</TableHead>
-                      <TableHead>Ресурс</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((a) => (
-                      <TableRow key={a.service_id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            {a.service_name}
-                            {a.group_name && (
-                              <Badge variant="outline" className="font-normal">
-                                у складі групи «{a.group_name}»
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{fmt(a.price)}</TableCell>
-                        <TableCell>{a.discount}</TableCell>
-                        <TableCell>{fmt(a.effective_revenue)}</TableCell>
-                        <TableCell>{fmt(a.resource_used)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ))}
+          <CollapsibleContent>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm max-w-md">
+                <dt className="text-muted-foreground">T (загальний ресурс)</dt>
+                <dd>{fmt(d.b_total)}</dd>
+                {orderedParams(d.algorithm, d.params).map((row) => (
+                  <FragmentRow key={row.key} label={row.label} value={formatParamValue(row.value)} />
+                ))}
+              </dl>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {iterations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Збіжність</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <IterationChart
+              series={[{ name: ALGO_LABEL[d.algorithm], points: iterations }]}
+            />
           </CardContent>
         </Card>
       )}
 
-      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Порівняти зі сценарієм</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-72 overflow-auto flex flex-col gap-2">
-            {allFormations.filter((f) => f.id !== id).length === 0 ? (
-              <span className="text-sm text-muted-foreground">Немає інших сценаріїв.</span>
-            ) : (
-              allFormations
-                .filter((f) => f.id !== id)
-                .map((f) => (
-                  <label key={f.id} className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={selected.has(f.id)}
-                      onCheckedChange={() =>
-                        setSelected((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(f.id)) next.delete(f.id);
-                          else next.add(f.id);
-                          return next;
-                        })
-                      }
-                    />
-                    <span className="text-sm">{f.name}</span>
-                  </label>
-                ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={selected.size === 0}
-              onClick={() => {
-                const ids = [id, ...selected].join(',');
-                navigate(`/formations/compare?ids=${ids}`);
-              }}
-            >
-              Порівняти
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Card>
+        <CardHeader>
+          <CardTitle>Призначення</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {d.assignments.length === 0 ? (
+            <p className="text-muted-foreground">Немає призначень.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Сервіс</TableHead>
+                  <TableHead>Провайдер</TableHead>
+                  <TableHead>Ціна</TableHead>
+                  <TableHead>Знижка</TableHead>
+                  <TableHead>Дохід</TableHead>
+                  <TableHead>Ресурс</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {d.assignments.map((a, i) => {
+                  // For combined runs the negotiated discount is final_discount;
+                  // mark when it differs from the planning r_max.
+                  const negotiated = a.final_discount;
+                  const shown = negotiated ?? a.discount;
+                  const differs =
+                    negotiated != null && Math.abs(negotiated - a.discount) > 1e-9;
+                  return (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">
+                        {a.service_name}
+                        {a.group_name && (
+                          <Badge variant="secondary" className="ml-2">{a.group_name}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{a.provider_name}</TableCell>
+                      <TableCell>{fmt(a.price)}</TableCell>
+                      <TableCell>
+                        {shown}
+                        {differs && (
+                          <span
+                            className="ml-1 text-xs text-muted-foreground"
+                            title={`узгоджено: ${a.final_discount} (межа ${a.discount})`}
+                          >
+                            {negotiated! < a.discount ? '↓' : '↑'}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>{fmt(a.effective_revenue)}</TableCell>
+                      <TableCell>{fmt(a.resource_used)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-lg font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function FragmentRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd>{value}</dd>
+    </>
   );
 }
