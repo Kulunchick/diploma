@@ -587,6 +587,8 @@ async def compare_formations(
                 algorithm=scenario.algorithm,
                 status=scenario.status,
                 value=scenario.value,
+                b_total=float(scenario.b_total),
+                params=scenario.params,
                 total_revenue=detail.totals.total_revenue,
                 total_resource_used=detail.totals.total_resource_used,
                 per_provider=sorted(by_provider.values(), key=lambda e: e.provider_name),

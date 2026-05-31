@@ -82,6 +82,8 @@ class CompareScenario(BaseModel):
     algorithm: str
     status: str
     value: float | None = None
+    b_total: float
+    params: dict
     total_revenue: float
     total_resource_used: float
     per_provider: list[CompareProviderBreakdown]

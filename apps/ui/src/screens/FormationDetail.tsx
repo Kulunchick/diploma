@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -17,6 +18,11 @@ import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
 import { Checkbox } from '@/components/ui/checkbox.tsx';
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible.tsx';
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -32,11 +38,7 @@ import {
   TableRow,
 } from '@/components/ui/table.tsx';
 import StatusBadge from '@/components/StatusBadge.tsx';
-
-const ALGO_LABEL: Record<string, string> = {
-  probabilistic: 'Ймовірнісно-жадібний',
-  ant_colony: 'Мурашиних колоній',
-};
+import { ALGO_LABEL, formatParamValue, orderedParams } from '@/lib/algorithmParams';
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -82,6 +84,7 @@ export default function FormationDetail() {
 
   const [compareOpen, setCompareOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [paramsOpen, setParamsOpen] = useState(false);
 
   // Group assignments by provider for display.
   const grouped = useMemo(() => {
@@ -149,6 +152,38 @@ export default function FormationDetail() {
             </div>
           )}
         </CardContent>
+      </Card>
+
+      <Card>
+        <Collapsible open={paramsOpen} onOpenChange={setParamsOpen}>
+          <CollapsibleTrigger className="w-full flex items-center justify-between px-6 py-4 text-left">
+            <span className="font-semibold flex items-center gap-2">
+              Параметри алгоритму
+              {!paramsOpen && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  · T = {fmt(data.b_total)}
+                </span>
+              )}
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 transition-transform ${paramsOpen ? 'rotate-180' : ''}`}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="px-6 pb-4">
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-8 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">T (загальний ресурс)</dt>
+                <dd className="font-medium">{fmt(data.b_total)}</dd>
+                {orderedParams(data.algorithm, data.params).map((p) => (
+                  <div key={p.key} className="contents">
+                    <dt className="text-muted-foreground">{p.label}</dt>
+                    <dd className="font-medium">{formatParamValue(p.value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <Card>

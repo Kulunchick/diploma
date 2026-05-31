@@ -15,11 +15,16 @@ import { compareFormations, getIterations } from '@/api/formations';
 import IterationChart, { SERIES_PALETTE } from '@/components/IterationChart.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
-
-const ALGO_LABEL: Record<string, string> = {
-  probabilistic: 'Ймовірнісно-жадібний',
-  ant_colony: 'Мурашиних колоній',
-};
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table.tsx';
+import { cn } from '@/lib/utils';
+import { ALGO_LABEL, formatParamValue, orderedParams } from '@/lib/algorithmParams';
 
 export default function FormationsCompare() {
   const [params] = useSearchParams();
@@ -68,6 +73,34 @@ export default function FormationsCompare() {
       })),
     }))
     .filter((srs) => srs.data.length > 0);
+
+  // Parameter comparison: per scenario label→value, then the union of labels
+  // (first-seen order) as rows. null cell → em-dash.
+  const perScenarioParams = scenarios.map((s) => {
+    const map = new Map<string, string>();
+    for (const r of orderedParams(s.algorithm, s.params)) map.set(r.label, formatParamValue(r.value));
+    return map;
+  });
+  const labelOrder: string[] = [];
+  const seenLabels = new Set<string>();
+  scenarios.forEach((s) => {
+    for (const r of orderedParams(s.algorithm, s.params)) {
+      if (!seenLabels.has(r.label)) {
+        seenLabels.add(r.label);
+        labelOrder.push(r.label);
+      }
+    }
+  });
+  const paramRows: { label: string; values: (string | null)[] }[] = [
+    { label: 'Алгоритм', values: scenarios.map((s) => ALGO_LABEL[s.algorithm]) },
+    { label: 'T (загальний ресурс)', values: scenarios.map((s) => Math.round(s.b_total).toLocaleString('uk')) },
+    ...labelOrder.map((label) => ({
+      label,
+      values: perScenarioParams.map((m) => m.get(label) ?? null),
+    })),
+  ];
+  const rowDiffers = (values: (string | null)[]) =>
+    new Set(values.map((v) => v ?? '—')).size > 1;
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,6 +179,42 @@ export default function FormationsCompare() {
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Параметри алгоритму</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Параметр</TableHead>
+                {scenarios.map((s) => (
+                  <TableHead key={s.id}>{s.name}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paramRows.map((row) => {
+                const differs = rowDiffers(row.values);
+                return (
+                  <TableRow key={row.label}>
+                    <TableCell className="text-muted-foreground">{row.label}</TableCell>
+                    {row.values.map((v, i) => (
+                      <TableCell
+                        key={i}
+                        className={cn('font-medium', differs && 'bg-amber-50')}
+                      >
+                        {v ?? <span className="text-muted-foreground font-normal">—</span>}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

@@ -387,6 +387,8 @@ export interface CompareScenario {
   algorithm: FormationAlgorithm;
   status: FormationStatus;
   value: number | null;
+  b_total: number;
+  params: Record<string, number>;
   total_revenue: number;
   total_resource_used: number;
   per_provider: CompareProviderBreakdown[];
