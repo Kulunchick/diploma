@@ -34,6 +34,7 @@ from src.operations.db.models import (
 )
 from src.operations.models.algorithm_parametrs import (
     AntColonyParameters,
+    CombinedParameters,
     ProbabilisticParameters,
 )
 from src.operations.models.formation import (
@@ -51,9 +52,12 @@ from src.operations.models.formation import (
 from src.operations.routers.deps import get_redis, get_temporal_client
 from src.operations.security import get_current_user
 from src.operations.temporal_types import (
+    COMBINED_FORMATION_WORKFLOW_NAME,
     SINGLE_ALGORITHM_WORKFLOW_NAME,
     TASK_QUEUE,
     AntColonyParams,
+    CombinedParams,
+    CombinedSolveInput,
     ProbabilisticParams,
     SingleSolveInput,
 )
@@ -103,19 +107,21 @@ def _build_payload(
     # Per-service planning vectors aligned to provider order (truncated to int).
     service_cells: dict[str, dict] = {}
     for s in services:
-        price, resource, discount, prov_rev = [], [], [], []
+        price, resource, discount, prov_rev, min_val = [], [], [], [], []
         for p in providers:
             cell = by_pair.get((s.id, p.id))
             price.append(int(cell.price) if cell else 0)
             resource.append(int(cell.resource) if cell else 0)
             discount.append(float(cell.discount) if cell else 0.0)
             prov_rev.append(float(cell.provider_revenue) if cell else 0.0)
+            min_val.append(float(cell.min_value) if cell else 0.0)
         service_cells[str(s.id)] = {
             "name": s.name,
             "price": price,
             "resource": resource,
             "discount": discount,
-            "provider_revenue": prov_rev,  # stored for the future combined method
+            "provider_revenue": prov_rev,  # p_ij — combined method
+            "min_value": min_val,  # s_ij — combined-method constraint (4)
         }
 
     # Partition services into units: one per group, one per ungrouped service.
@@ -140,13 +146,17 @@ def _build_payload(
 
     units.sort(key=lambda u: min(service_cells[sid]["name"] for sid in u["service_ids"]))
 
-    # Aggregate matrices over units.
+    # Aggregate matrices over units. p_ij (Σ provider_revenue) and s_ij (max
+    # threshold over the unit — the strictest the provider applies to any
+    # service in the bundle) feed the combined method; cheap to always compute.
     n = len(providers)
     c_matrix: list[list[int]] = []
     b_ij: list[list[int]] = []
     omega: list[list[float]] = []
+    p_matrix: list[list[int]] = []
+    s_matrix: list[list[float]] = []
     for u in units:
-        c_row, b_row, o_row = [], [], []
+        c_row, b_row, o_row, p_row, s_row = [], [], [], [], []
         for j in range(n):
             c_unit = sum(service_cells[sid]["price"][j] for sid in u["service_ids"])
             b_unit = sum(service_cells[sid]["resource"][j] for sid in u["service_ids"])
@@ -154,12 +164,23 @@ def _build_payload(
                 service_cells[sid]["discount"][j] * service_cells[sid]["price"][j]
                 for sid in u["service_ids"]
             )
+            p_unit = sum(
+                int(service_cells[sid]["provider_revenue"][j]) for sid in u["service_ids"]
+            )
+            s_unit = max(
+                (service_cells[sid]["min_value"][j] for sid in u["service_ids"]),
+                default=0.0,
+            )
             c_row.append(c_unit)
             b_row.append(b_unit)
             o_row.append(disc_weighted / c_unit if c_unit > 0 else 0.0)
+            p_row.append(p_unit)
+            s_row.append(s_unit)
         c_matrix.append(c_row)
         b_ij.append(b_row)
         omega.append(o_row)
+        p_matrix.append(p_row)
+        s_matrix.append(s_row)
 
     return {
         "m": len(units),
@@ -167,6 +188,8 @@ def _build_payload(
         "c": c_matrix,
         "b_ij": b_ij,
         "omega": omega,
+        "p_ij": p_matrix,
+        "s_ij": s_matrix,
         "service_cells": service_cells,
         "unit_order": units,
         "provider_order": [str(p.id) for p in providers],
@@ -293,6 +316,7 @@ async def _build_detail(
                 effective_revenue=eff,
                 resource_used=resource_used,
                 group_name=group_name_by_service.get(str(a.service_id)),
+                final_discount=float(a.final_discount) if a.final_discount is not None else None,
             )
         )
 
@@ -304,12 +328,20 @@ async def _build_detail(
         provider_count=len({a.provider_id for a in assignments}),
         service_count=len({a.service_id for a in assignments}),
     )
+    combined_benefit = (
+        float(scenario.value) + float(scenario.provider_value)
+        if scenario.value is not None and scenario.provider_value is not None
+        else None
+    )
     return FormationDetail(
         id=scenario.id,
         name=scenario.name,
         algorithm=scenario.algorithm,
         status=scenario.status,
         value=scenario.value,
+        provider_value=scenario.provider_value,
+        combined_source=scenario.combined_source,
+        combined_benefit=combined_benefit,
         b_total=float(scenario.b_total),
         params=scenario.params,
         workflow_id=scenario.workflow_id,
@@ -333,17 +365,24 @@ async def create_formation(
     client: Client = Depends(get_temporal_client),
 ) -> FormationScenario:
     # Validate params for the chosen algorithm and map UI names → solver names.
+    ant = AntColonyParams()
+    prob = ProbabilisticParams()
+    combined: CombinedParameters | None = None
     if body.algorithm == "ant_colony":
         p = AntColonyParameters(**body.params)
         ant = AntColonyParams(
             num_ants=p.num_ants, kmax=p.Kmax, alpha=p.alpha, beta=p.beta,
             rho=p.p, initial_pheromone=p.tau,
         )
-        prob = ProbabilisticParams()
+    elif body.algorithm == "probabilistic":
+        prob = ProbabilisticParams(kmax=ProbabilisticParameters(**body.params).Kmax)
+    elif body.algorithm == "combined":
+        combined = CombinedParameters(**body.params)
     else:
-        p = ProbabilisticParameters(**body.params)
-        prob = ProbabilisticParams(kmax=p.Kmax)
-        ant = AntColonyParams()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown algorithm {body.algorithm!r}",
+        )
 
     services = list(
         (await session.execute(
@@ -388,18 +427,36 @@ async def create_formation(
     session.add(scenario)
     await session.flush()  # assign scenario.id
 
+    workflow_id = f"formation-{scenario.id}"
+    redis_channel = f"formation:{workflow_id}"
+
+    # Frozen solver input + per-service vectors for result expansion.
+    input_payload = {
+        "m": payload["m"],
+        "n": payload["n"],
+        "c": payload["c"],
+        "b_ij": payload["b_ij"],
+        "omega": payload["omega"],
+        "b_total": b_total,
+        "service_cells": payload["service_cells"],
+    }
+
+    if combined is not None:
+        # omega_max: per-pair planning discount, OR all-0.95 when ignoring the
+        # planning upper bound (treat discounts as free in [0, 0.95]).
+        omega_max = (
+            [[0.95 for _ in row] for row in payload["omega"]]
+            if combined.ignore_discounts
+            else payload["omega"]
+        )
+        input_payload.update({
+            "p_ij": payload["p_ij"], "s_ij": payload["s_ij"],
+            "omega_max": omega_max, "ignore_discounts": combined.ignore_discounts,
+        })
+
     snapshot = FormationSnapshot(
         scenario_id=scenario.id,
-        input_payload={
-            "m": payload["m"],
-            "n": payload["n"],
-            "c": payload["c"],
-            "b_ij": payload["b_ij"],
-            "omega": payload["omega"],
-            "b_total": b_total,
-            # Per-service vectors for result expansion (units → service rows).
-            "service_cells": payload["service_cells"],
-        },
+        input_payload=input_payload,
         # service_order column now holds the unit partition.
         service_order=payload["unit_order"],
         provider_order=payload["provider_order"],
@@ -408,28 +465,41 @@ async def create_formation(
     await session.commit()
     await session.refresh(scenario)
 
-    workflow_id = f"formation-{scenario.id}"
-    await client.start_workflow(
-        SINGLE_ALGORITHM_WORKFLOW_NAME,
-        SingleSolveInput(
-            m=payload["m"],
-            n=payload["n"],
-            c=payload["c"],
-            b_ij=payload["b_ij"],
-            b_total=b_total,
-            omega=payload["omega"],
-            algorithm=body.algorithm,
-            ant_colony=ant,
-            probabilistic=prob,
-            scenario_id=str(scenario.id),
-            # Distinct prefix from the legacy /solve flow; drained into
-            # formation_iterations by the persist activity.
-            redis_channel=f"formation:{workflow_id}",
-        ),
-        id=workflow_id,
-        task_queue=TASK_QUEUE,
-        execution_timeout=timedelta(minutes=10),
-    )
+    if combined is not None:
+        await client.start_workflow(
+            COMBINED_FORMATION_WORKFLOW_NAME,
+            CombinedSolveInput(
+                m=payload["m"], n=payload["n"], c=payload["c"], b_ij=payload["b_ij"],
+                p_ij=payload["p_ij"], omega_max=omega_max, s_ij=payload["s_ij"],
+                b_total=b_total,
+                params=CombinedParams(
+                    kmax_subproblem=combined.kmax_subproblem,
+                    discount_step=combined.discount_step,
+                    local_search_restarts=combined.local_search_restarts,
+                ),
+                scenario_id=str(scenario.id),
+                redis_channel=redis_channel,
+            ),
+            id=workflow_id,
+            task_queue=TASK_QUEUE,
+            execution_timeout=timedelta(minutes=15),
+        )
+    else:
+        await client.start_workflow(
+            SINGLE_ALGORITHM_WORKFLOW_NAME,
+            SingleSolveInput(
+                m=payload["m"], n=payload["n"], c=payload["c"], b_ij=payload["b_ij"],
+                b_total=b_total, omega=payload["omega"],
+                algorithm=body.algorithm,
+                ant_colony=ant,
+                probabilistic=prob,
+                scenario_id=str(scenario.id),
+                redis_channel=redis_channel,
+            ),
+            id=workflow_id,
+            task_queue=TASK_QUEUE,
+            execution_timeout=timedelta(minutes=15),
+        )
 
     scenario.workflow_id = workflow_id
     await session.commit()
@@ -541,11 +611,16 @@ async def export_csv(
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["service", "provider", "price", "discount", "effective_revenue", "resource_used"])
+    writer.writerow([
+        "service", "provider", "price", "discount", "final_discount",
+        "effective_revenue", "resource_used",
+    ])
     for a in detail.assignments:
-        writer.writerow(
-            [a.service_name, a.provider_name, a.price, a.discount, a.effective_revenue, a.resource_used]
-        )
+        writer.writerow([
+            a.service_name, a.provider_name, a.price, a.discount,
+            a.final_discount if a.final_discount is not None else a.discount,
+            a.effective_revenue, a.resource_used,
+        ])
     return Response(
         content=buf.getvalue(),
         media_type="text/csv",
@@ -587,6 +662,8 @@ async def compare_formations(
                 algorithm=scenario.algorithm,
                 status=scenario.status,
                 value=scenario.value,
+                provider_value=scenario.provider_value,
+                combined_benefit=detail.combined_benefit,
                 b_total=float(scenario.b_total),
                 params=scenario.params,
                 total_revenue=detail.totals.total_revenue,

@@ -10,9 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class FormationCreate(BaseModel):
     name: str = Field(min_length=1)
     b_total: float = Field(gt=0)
-    algorithm: Literal["probabilistic", "ant_colony"]
-    # Validated against AntColonyParameters / ProbabilisticParameters in the
-    # router depending on `algorithm`; stored verbatim in JSONB.
+    algorithm: Literal["probabilistic", "ant_colony", "combined"]
+    # Validated against AntColony/Probabilistic/CombinedParameters in the router
+    # depending on `algorithm`; stored verbatim in JSONB.
     params: dict = {}
 
 
@@ -44,6 +44,8 @@ class FormationAssignmentRead(BaseModel):
     resource_used: float
     # Set when the service was assigned as part of a group (all-or-nothing unit).
     group_name: str | None = None
+    # The discount actually applied (negotiated for combined; = discount else).
+    final_discount: float | None = None
 
 
 class FormationTotals(BaseModel):
@@ -59,6 +61,10 @@ class FormationDetail(BaseModel):
     algorithm: str
     status: str
     value: float | None = None
+    # Combined-method only: F_prov, winning candidate, and value + provider_value.
+    provider_value: float | None = None
+    combined_source: str | None = None
+    combined_benefit: float | None = None
     b_total: float
     params: dict
     workflow_id: str | None = None
@@ -82,6 +88,8 @@ class CompareScenario(BaseModel):
     algorithm: str
     status: str
     value: float | None = None
+    provider_value: float | None = None
+    combined_benefit: float | None = None
     b_total: float
     params: dict
     total_revenue: float

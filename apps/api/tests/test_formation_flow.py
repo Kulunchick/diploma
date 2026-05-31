@@ -160,7 +160,7 @@ async def test_csv_export(client, auth_headers, mock_temporal):
     assert "text/csv" in res.headers["content-type"]
     assert "attachment" in res.headers["content-disposition"]
     lines = res.text.strip().splitlines()
-    assert lines[0] == "service,provider,price,discount,effective_revenue,resource_used"
+    assert lines[0] == "service,provider,price,discount,final_discount,effective_revenue,resource_used"
     assert len(lines) == 2  # header + one assignment
 
 
