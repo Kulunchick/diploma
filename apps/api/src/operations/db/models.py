@@ -128,6 +128,7 @@ class PlanningCell(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("service_id", "provider_id", name="uq_planning_service_provider"),
         CheckConstraint("discount >= 0 AND discount < 1", name="ck_planning_discount"),
+        CheckConstraint("min_value >= 0", name="ck_planning_min_value"),
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
@@ -152,17 +153,28 @@ class PlanningCell(TimestampMixin, Base):
     discount: Mapped[float] = mapped_column(
         Numeric(6, 4), nullable=False, server_default=text("0")
     )
+    # s_ij — minimum relative value acceptable to the provider; used only by the
+    # combined method (constraint (4)). 0 → constraint always satisfied.
+    min_value: Mapped[float] = mapped_column(
+        Numeric(8, 4), nullable=False, server_default=text("0")
+    )
 
 
 class FormationScenario(TimestampMixin, Base):
     __tablename__ = "formation_scenarios"
     __table_args__ = (
         CheckConstraint(
-            "algorithm IN ('probabilistic','ant_colony')", name="ck_formation_algorithm"
+            "algorithm IN ('probabilistic','ant_colony','combined')",
+            name="ck_formation_algorithm",
         ),
         CheckConstraint(
             "status IN ('pending','running','completed','failed')",
             name="ck_formation_status",
+        ),
+        CheckConstraint(
+            "combined_source IS NULL OR "
+            "combined_source IN ('subtask_a_improved','subtask_b_improved')",
+            name="ck_formation_combined_source",
         ),
     )
 
@@ -183,6 +195,10 @@ class FormationScenario(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Combined-method only: F_prov, and which improved candidate won stage 4.
+    # value stores F_IT for all algorithms; these stay NULL for the other two.
+    provider_value: Mapped[float | None] = mapped_column(Double, nullable=True)
+    combined_source: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     assignments: Mapped[list["FormationAssignment"]] = relationship(
         back_populates="scenario", cascade="all, delete-orphan"
@@ -211,6 +227,9 @@ class FormationAssignment(Base):
     price: Mapped[float] = mapped_column(Numeric(18, 4), nullable=True)
     discount: Mapped[float] = mapped_column(Numeric(6, 4), nullable=True)
     effective_revenue: Mapped[float] = mapped_column(Numeric(18, 4), nullable=True)
+    # The discount actually applied: static planning r for probabilistic/ant,
+    # the concession-heuristic outcome for combined. Backfilled = discount.
+    final_discount: Mapped[float | None] = mapped_column(Numeric(6, 4), nullable=True)
 
     scenario: Mapped[FormationScenario] = relationship(back_populates="assignments")
 
