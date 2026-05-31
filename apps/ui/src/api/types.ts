@@ -235,3 +235,161 @@ export interface SolveResult {
   ant_colony: SolveAlgorithmResult | null;
   probabilistic: SolveAlgorithmResult | null;
 }
+
+// ---------------------------------------------------------------------------
+// Information-system resources (mirror apps/api/src/operations/models/*)
+// ---------------------------------------------------------------------------
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string | null;
+  created_at: string;
+}
+
+export interface AuthToken {
+  access_token: string;
+  token_type: string;
+}
+
+export interface RegisterResponse {
+  user: User;
+  access_token: string;
+  token_type: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  description: string | null;
+  group_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceInput {
+  name: string;
+  description?: string | null;
+}
+
+export interface ServiceGroup {
+  id: string;
+  name: string;
+  members: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceGroupInput {
+  name: string;
+  member_ids: string[];
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderInput {
+  name: string;
+  description?: string | null;
+}
+
+export interface PlanningCell {
+  id: string;
+  service_id: string;
+  provider_id: string;
+  price: number;
+  resource: number;
+  provider_revenue: number;
+  discount: number;
+}
+
+export type PlanningField = 'price' | 'resource' | 'provider_revenue' | 'discount';
+
+export interface PlanningCellUpsert {
+  service_id: string;
+  provider_id: string;
+  price: number;
+  resource: number;
+  provider_revenue: number;
+  discount: number;
+}
+
+export type FormationAlgorithm = 'probabilistic' | 'ant_colony';
+export type FormationStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface FormationListItem {
+  id: string;
+  name: string;
+  algorithm: FormationAlgorithm;
+  status: FormationStatus;
+  value: number | null;
+  created_at: string;
+}
+
+export interface FormationCreate {
+  name: string;
+  b_total: number;
+  algorithm: FormationAlgorithm;
+  params: Record<string, number>;
+}
+
+export interface FormationAssignment {
+  service_id: string;
+  service_name: string;
+  provider_id: string;
+  provider_name: string;
+  price: number;
+  discount: number;
+  effective_revenue: number;
+  resource_used: number;
+}
+
+export interface FormationTotals {
+  total_revenue: number;
+  total_resource_used: number;
+  provider_count: number;
+  service_count: number;
+}
+
+export interface FormationDetail {
+  id: string;
+  name: string;
+  algorithm: FormationAlgorithm;
+  status: FormationStatus;
+  value: number | null;
+  b_total: number;
+  params: Record<string, number>;
+  workflow_id: string | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+  assignments: FormationAssignment[];
+  totals: FormationTotals;
+}
+
+export interface CompareProviderBreakdown {
+  provider_id: string;
+  provider_name: string;
+  assignment_count: number;
+  services: string[];
+}
+
+export interface CompareScenario {
+  id: string;
+  name: string;
+  algorithm: FormationAlgorithm;
+  status: FormationStatus;
+  value: number | null;
+  total_revenue: number;
+  total_resource_used: number;
+  per_provider: CompareProviderBreakdown[];
+}
+
+export interface CompareResponse {
+  scenarios: CompareScenario[];
+}
