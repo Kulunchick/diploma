@@ -8,7 +8,7 @@ from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 
 from src.operations.db.migrations import run_migrations
-from src.operations.routers import experiments, jobs, solve
+from src.operations.routers import auth, experiments, jobs, solve
 from src.operations.temporal_types import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 
 
@@ -47,6 +47,7 @@ app.add_middleware(
 app.include_router(solve.router, prefix="/api")
 app.include_router(experiments.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 
 
 if __name__ == "__main__":
