@@ -20,11 +20,23 @@ DATABASE_URL = os.getenv(
 )
 
 
+def connect_args() -> dict:
+    """asyncpg >= 0.31 negotiates SSL by default and raises against a non-TLS
+    server instead of falling back. Our Postgres (appdb / in-cluster) runs
+    without TLS, so disable it unless DB_SSL is explicitly requested. Shared
+    with Alembic's env.py so both the runtime engine and migrations agree."""
+    if os.getenv("DB_SSL", "").lower() in ("require", "true", "1"):
+        return {}
+    return {"ssl": False}
+
+
 class Base(DeclarativeBase):
     pass
 
 
-engine: AsyncEngine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
+engine: AsyncEngine = create_async_engine(
+    DATABASE_URL, pool_pre_ping=True, connect_args=connect_args()
+)
 
 AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
     engine,

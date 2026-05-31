@@ -6,7 +6,7 @@ from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
-from src.operations.db.base import DATABASE_URL, Base
+from src.operations.db.base import DATABASE_URL, Base, connect_args
 from src.operations.db import models  # noqa: F401 — register tables on metadata
 
 config = context.config
@@ -40,6 +40,7 @@ async def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=NullPool,
+        connect_args=connect_args(),
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
