@@ -70,8 +70,9 @@ async def create_service(
             status_code=status.HTTP_409_CONFLICT,
             detail="A service with this name already exists",
         )
-    await session.refresh(service, attribute_names=["groups"])
-    return _to_read(service)
+    # Re-fetch fully populated (all columns + groups eager) so building the
+    # read model never triggers a lazy/expired load in the async context.
+    return _to_read(await _get_owned(service.id, session, user))
 
 
 @router.get("/{service_id}", response_model=ServiceRead)
@@ -101,8 +102,7 @@ async def update_service(
             status_code=status.HTTP_409_CONFLICT,
             detail="A service with this name already exists",
         )
-    await session.refresh(service, attribute_names=["groups"])
-    return _to_read(service)
+    return _to_read(await _get_owned(service.id, session, user))
 
 
 @router.delete("/{service_id}", status_code=status.HTTP_204_NO_CONTENT)

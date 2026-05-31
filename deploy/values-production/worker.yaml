@@ -1,2 +1,6 @@
 image:
   tag: 0d894ea4
+
+config:
+  # REQUIRED — same information-system Postgres as the backend.
+  databaseUrl: ""

@@ -10,3 +10,4 @@ data:
   TASK_QUEUE: {{ .Values.config.taskQueue | quote }}
   REDIS_URL: {{ .Values.config.redisUrl | quote }}
   CORS_ORIGINS: {{ required "config.corsOrigins is required" .Values.config.corsOrigins | quote }}
+  DATABASE_URL: {{ required "config.databaseUrl is required" .Values.config.databaseUrl | quote }}

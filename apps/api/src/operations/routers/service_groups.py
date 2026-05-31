@@ -99,8 +99,8 @@ async def create_service_group(
             status_code=status.HTTP_409_CONFLICT,
             detail="A service group with this name already exists",
         )
-    await session.refresh(group, attribute_names=["members"])
-    return _to_read(group)
+    # Re-fetch fully populated to avoid lazy/expired loads when serializing.
+    return _to_read(await _get_owned(group.id, session, user))
 
 
 @router.get("/{group_id}", response_model=ServiceGroupRead)
@@ -130,8 +130,7 @@ async def update_service_group(
             status_code=status.HTTP_409_CONFLICT,
             detail="A service group with this name already exists",
         )
-    await session.refresh(group, attribute_names=["members"])
-    return _to_read(group)
+    return _to_read(await _get_owned(group.id, session, user))
 
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)

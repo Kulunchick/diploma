@@ -9,4 +9,5 @@ data:
   TEMPORAL_NAMESPACE: {{ .Values.config.temporalNamespace | quote }}
   TASK_QUEUE: {{ .Values.config.taskQueue | quote }}
   REDIS_URL: {{ .Values.config.redisUrl | quote }}
+  DATABASE_URL: {{ required "config.databaseUrl is required" .Values.config.databaseUrl | quote }}
   PYTHONUNBUFFERED: "1"

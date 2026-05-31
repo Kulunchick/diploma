@@ -8,3 +8,7 @@ config:
   temporalHost: "diploma-temporal-frontend.temporal.svc.cluster.local:7233"
   redisUrl: "redis://redis-master.default.svc.cluster.local:6379"
   corsOrigins: "http://localhost:3000"
+  databaseUrl: "postgresql+asyncpg://diploma:diploma@appdb-postgresql.default.svc.cluster.local:5432/diploma"
+
+# Dev only — production must override via a sealed secret.
+jwtSecret: "dev-secret-change-me"

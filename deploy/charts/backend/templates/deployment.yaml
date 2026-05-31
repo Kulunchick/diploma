@@ -44,6 +44,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "backend.fullname" . }}-config
+            - secretRef:
+                name: {{ include "backend.fullname" . }}-secret
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
