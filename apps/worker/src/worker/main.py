@@ -6,11 +6,14 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
 
 from worker.activities import (
+    persist_combined_result_activity,
     persist_formation_result_activity,
     run_algorithm_activity,
+    run_combined_method_activity,
     set_redis_client,
 )
 from worker.config import REDIS_URL, TASK_QUEUE, TEMPORAL_HOST, TEMPORAL_NAMESPACE
+from worker.workflows.combined import CombinedFormationWorkflow
 from worker.workflows.single import SingleAlgorithmWorkflow
 
 
@@ -27,10 +30,12 @@ async def main() -> None:
     worker = Worker(
         client,
         task_queue=TASK_QUEUE,
-        workflows=[SingleAlgorithmWorkflow],
+        workflows=[SingleAlgorithmWorkflow, CombinedFormationWorkflow],
         activities=[
             run_algorithm_activity,
             persist_formation_result_activity,
+            run_combined_method_activity,
+            persist_combined_result_activity,
         ],
     )
 
