@@ -7,6 +7,7 @@ from src.operations.db.base import (
 )
 from src.operations.db.models import (
     FormationAssignment,
+    FormationIteration,
     FormationScenario,
     FormationSnapshot,
     PlanningCell,
@@ -24,6 +25,7 @@ __all__ = [
     "engine",
     "get_session",
     "FormationAssignment",
+    "FormationIteration",
     "FormationScenario",
     "FormationSnapshot",
     "PlanningCell",

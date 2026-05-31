@@ -10,7 +10,9 @@ from datetime import datetime
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Double,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -211,6 +213,19 @@ class FormationAssignment(Base):
     effective_revenue: Mapped[float] = mapped_column(Numeric(18, 4), nullable=True)
 
     scenario: Mapped[FormationScenario] = relationship(back_populates="assignments")
+
+
+class FormationIteration(Base):
+    """Per-iteration convergence history for a scenario (best objective value
+    at each solver iteration). The composite PK doubles as the lookup index."""
+
+    __tablename__ = "formation_iterations"
+
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("formation_scenarios.id", ondelete="CASCADE"), primary_key=True
+    )
+    iteration: Mapped[int] = mapped_column(Integer, primary_key=True)
+    best_value: Mapped[float] = mapped_column(Double, nullable=False)
 
 
 class FormationSnapshot(Base):

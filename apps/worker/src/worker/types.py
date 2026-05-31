@@ -51,3 +51,6 @@ class PersistFormationInput(BaseModel):
     scenario_id: str
     solution: list[list[int]]
     value: float
+    # Redis stream key holding the per-iteration convergence history (drained
+    # into formation_iterations on persist). None → no history captured.
+    redis_channel: str | None = None

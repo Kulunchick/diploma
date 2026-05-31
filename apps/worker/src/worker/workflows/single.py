@@ -54,6 +54,7 @@ class SingleAlgorithmWorkflow:
                 scenario_id=input.scenario_id,
                 solution=result.solution,
                 value=result.value,
+                redis_channel=input.redis_channel,
             ),
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=RetryPolicy(maximum_attempts=3),

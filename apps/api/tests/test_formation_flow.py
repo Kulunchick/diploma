@@ -37,12 +37,20 @@ class _MockTemporal:
         return _MockHandle()
 
 
+class _ApiFakeRedis:
+    """Minimal stand-in for the API's app.state.redis (the /iterations dep)."""
+
+    async def xrange(self, key, min="-", max="+"):
+        return []
+
+
 @pytest.fixture
 def mock_temporal():
     from src.operations.main import app
 
     mock = _MockTemporal()
     app.state.temporal = mock
+    app.state.redis = _ApiFakeRedis()
     return mock
 
 
@@ -268,3 +276,100 @@ async def test_one_service_one_group_enforced(client, auth_headers):
     # adding the same service to a second group is rejected
     r = await client.post("/api/service-groups", json={"name": "G2", "member_ids": [a]}, headers=h)
     assert r.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Per-iteration convergence history
+# ---------------------------------------------------------------------------
+
+import json as _json  # noqa: E402
+
+
+class _FakeWorkerRedis:
+    """Stand-in for the worker's Redis stream used by the persist activity."""
+
+    def __init__(self, entries, fail=False):
+        self._entries = entries
+        self._fail = fail
+        self.deleted = []
+
+    async def xrange(self, key, min="-", max="+"):
+        if self._fail:
+            raise RuntimeError("redis unavailable")
+        return self._entries
+
+    async def delete(self, key):
+        self.deleted.append(key)
+
+
+def _iter_entries(n):
+    return [
+        (f"{i}-0", {"data": _json.dumps(
+            {"type": "iteration", "algorithm": "probabilistic",
+             "iteration": i, "current_best_value": 1000.0 + i})})
+        for i in range(n)
+    ]
+
+
+async def _make_completed_formation(client, h):
+    s = [(await client.post("/api/services", json={"name": n}, headers=h)).json()["id"]
+         for n in ["SvcA", "SvcB"]]
+    p = [(await client.post("/api/providers", json={"name": n}, headers=h)).json()["id"]
+         for n in ["ProvA", "ProvB"]]
+    await client.post("/api/planning/bulk", json={"cells": [
+        {"service_id": s[0], "provider_id": p[0], "price": 500, "resource": 1000, "discount": 0.1},
+        {"service_id": s[1], "provider_id": p[1], "price": 300, "resource": 800, "discount": 0.2},
+    ]}, headers=h)
+    created = await client.post(
+        "/api/formations",
+        json={"name": "IT", "b_total": 5000, "algorithm": "probabilistic", "params": {"Kmax": 10}},
+        headers=h,
+    )
+    return created.json()["id"]
+
+
+async def test_iteration_history_persisted_and_idempotent(client, auth_headers, mock_temporal):
+    from worker import activities
+    from worker.activities import persist_formation_result_activity
+    from worker.types import PersistFormationInput
+
+    h = await auth_headers("iters@example.com")
+    sid = await _make_completed_formation(client, h)
+    fake = _FakeWorkerRedis(_iter_entries(10))
+    activities.set_redis_client(fake)
+    try:
+        payload = PersistFormationInput(
+            scenario_id=sid, solution=[[1, 0], [0, 1]], value=690.0,
+            redis_channel=f"formation:{sid}",
+        )
+        await persist_formation_result_activity(payload)
+        await persist_formation_result_activity(payload)  # idempotent re-run
+    finally:
+        activities.set_redis_client(None)
+
+    its = (await client.get(f"/api/formations/{sid}/iterations", headers=h)).json()
+    assert [r["iteration"] for r in its] == list(range(10))  # ordered, exactly 10
+    assert its[0]["best_value"] == 1000.0 and its[9]["best_value"] == 1009.0
+    assert f"formation:{sid}" in fake.deleted  # stream freed after draining
+
+
+async def test_scenario_completes_when_redis_unavailable(client, auth_headers, mock_temporal):
+    from worker import activities
+    from worker.activities import persist_formation_result_activity
+    from worker.types import PersistFormationInput
+
+    h = await auth_headers("itersdown@example.com")
+    sid = await _make_completed_formation(client, h)
+    activities.set_redis_client(_FakeWorkerRedis([], fail=True))
+    try:
+        await persist_formation_result_activity(PersistFormationInput(
+            scenario_id=sid, solution=[[1, 0], [0, 1]], value=690.0,
+            redis_channel=f"formation:{sid}",
+        ))
+    finally:
+        activities.set_redis_client(None)
+
+    detail = (await client.get(f"/api/formations/{sid}", headers=h)).json()
+    assert detail["status"] == "completed"  # result still recorded
+    its = (await client.get(f"/api/formations/{sid}/iterations", headers=h)).json()
+    assert its == []  # history degraded, but scenario intact

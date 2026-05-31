@@ -8,20 +8,22 @@ but are NOT part of the solver input in this iteration.
 """
 import csv
 import io
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from temporalio.client import Client, WorkflowExecutionStatus
-from temporalio.service import RPCError
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from temporalio.client import Client, WorkflowExecutionStatus
+from temporalio.service import RPCError
 
 from src.operations.db.base import get_session
-from sqlalchemy.orm import selectinload
-
 from src.operations.db.models import (
     FormationAssignment,
+    FormationIteration,
     FormationScenario,
     FormationSnapshot,
     PlanningCell,
@@ -42,10 +44,11 @@ from src.operations.models.formation import (
     FormationAssignmentRead,
     FormationCreate,
     FormationDetail,
+    FormationIterationRead,
     FormationListItem,
     FormationTotals,
 )
-from src.operations.routers.deps import get_temporal_client
+from src.operations.routers.deps import get_redis, get_temporal_client
 from src.operations.security import get_current_user
 from src.operations.temporal_types import (
     SINGLE_ALGORITHM_WORKFLOW_NAME,
@@ -419,7 +422,9 @@ async def create_formation(
             ant_colony=ant,
             probabilistic=prob,
             scenario_id=str(scenario.id),
-            redis_channel=f"solve:{workflow_id}",
+            # Distinct prefix from the legacy /solve flow; drained into
+            # formation_iterations by the persist activity.
+            redis_channel=f"formation:{workflow_id}",
         ),
         id=workflow_id,
         task_queue=TASK_QUEUE,
@@ -459,6 +464,49 @@ async def get_formation(
     scenario = await _get_owned(scenario_id, session, user)
     await _reconcile_status(scenario, client, session)
     return await _build_detail(scenario, session)
+
+
+@router.get("/{scenario_id}/iterations", response_model=list[FormationIterationRead])
+async def get_iterations(
+    scenario_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+) -> list[FormationIterationRead]:
+    """Convergence history sorted by iteration. While the scenario is still
+    running, this is read live from the Redis stream; once it completes the
+    persist activity has drained it into Postgres. Empty list is valid."""
+    scenario = await _get_owned(scenario_id, session, user)
+
+    if scenario.status in ("completed", "failed"):
+        rows = await session.execute(
+            select(FormationIteration.iteration, FormationIteration.best_value)
+            .where(FormationIteration.scenario_id == scenario.id)
+            .order_by(FormationIteration.iteration)
+        )
+        return [
+            FormationIterationRead(iteration=it, best_value=bv) for it, bv in rows.all()
+        ]
+
+    # pending / running — read the live stream (best-effort).
+    if not scenario.workflow_id:
+        return []
+    try:
+        entries = await redis.xrange(f"formation:{scenario.workflow_id}", min="-", max="+")
+    except Exception:
+        return []
+    by_iter: dict[int, float] = {}
+    for _entry_id, fields in entries:
+        try:
+            data = json.loads(fields["data"])
+        except (KeyError, ValueError):
+            continue
+        if data.get("type") == "iteration":
+            by_iter[int(data["iteration"])] = float(data["current_best_value"])
+    return [
+        FormationIterationRead(iteration=it, best_value=bv)
+        for it, bv in sorted(by_iter.items())
+    ]
 
 
 @router.get("/{scenario_id}/export.json")

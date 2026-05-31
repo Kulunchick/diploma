@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -7,9 +7,11 @@ import {
   exportCsv,
   exportJson,
   getFormation,
+  getIterations,
   listFormations,
 } from '@/api/formations';
 import type { FormationAssignment } from '@/api/types';
+import IterationChart, { ALGO_COLOR } from '@/components/IterationChart.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
@@ -60,6 +62,23 @@ export default function FormationDetail() {
   });
 
   const { data: allFormations = [] } = useQuery({ queryKey: ['formations'], queryFn: listFormations });
+
+  const running = data?.status === 'pending' || data?.status === 'running';
+
+  // Convergence history: live from Redis while running, canonical from Postgres
+  // once finished. Refetch once more when status flips to terminal.
+  const itersQuery = useQuery({
+    queryKey: ['iterations', id],
+    queryFn: () => getIterations(id),
+    enabled: !!id,
+    refetchInterval: () => (running ? 1200 : false),
+  });
+  useEffect(() => {
+    if (data?.status === 'completed' || data?.status === 'failed') {
+      void itersQuery.refetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.status]);
 
   const [compareOpen, setCompareOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -129,6 +148,37 @@ export default function FormationDetail() {
               <Stat label="Сервісів" value={String(data.totals.service_count)} />
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Збіжність алгоритму</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const iters = itersQuery.data ?? [];
+            if (iters.length > 0) {
+              return (
+                <IterationChart
+                  series={[
+                    {
+                      name: ALGO_LABEL[data.algorithm] ?? data.algorithm,
+                      color: ALGO_COLOR[data.algorithm],
+                      data: iters.map((i) => ({ iteration: i.iteration, value: i.best_value })),
+                    },
+                  ]}
+                />
+              );
+            }
+            return (
+              <p className="text-muted-foreground">
+                {running
+                  ? 'Очікування ітерацій…'
+                  : 'Історія ітерацій недоступна для цього сценарію.'}
+              </p>
+            );
+          })()}
         </CardContent>
       </Card>
 

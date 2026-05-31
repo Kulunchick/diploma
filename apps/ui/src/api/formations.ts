@@ -3,11 +3,14 @@ import type {
   CompareResponse,
   FormationCreate,
   FormationDetail,
+  FormationIteration,
   FormationListItem,
 } from '@/api/types';
 
 export const listFormations = () => api.get<FormationListItem[]>('/formations');
 export const getFormation = (id: string) => api.get<FormationDetail>(`/formations/${id}`);
+export const getIterations = (id: string) =>
+  api.get<FormationIteration[]>(`/formations/${id}/iterations`);
 export const createFormation = (body: FormationCreate) =>
   api.post<FormationListItem>('/formations', body);
 export const deleteFormation = (id: string) => api.del<void>(`/formations/${id}`);

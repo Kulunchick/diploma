@@ -183,6 +183,24 @@ def _maybe_json(value):
     return json.loads(value) if isinstance(value, str) else value
 
 
+async def _read_iteration_history(channel: Optional[str]) -> list[tuple[int, float]]:
+    """Read the full per-iteration convergence history from the Redis stream.
+    Last write per iteration wins. Returns [] if Redis is unavailable or empty."""
+    if not channel or _redis is None:
+        return []
+    entries = await _redis.xrange(channel, min="-", max="+")
+    by_iter: dict[int, float] = {}
+    for _entry_id, fields in entries:
+        try:
+            data = json.loads(fields["data"])
+        except (KeyError, ValueError):
+            continue
+        if data.get("type") != "iteration":
+            continue
+        by_iter[int(data["iteration"])] = float(data["current_best_value"])
+    return sorted(by_iter.items())
+
+
 @activity.defn
 async def persist_formation_result_activity(input: PersistFormationInput) -> None:
     """Write a finished formation back to Postgres, expanding the unit-level
@@ -252,6 +270,25 @@ async def persist_formation_result_activity(input: PersistFormationInput) -> Non
                 input.scenario_id, total_eff, input.value,
             )
 
+        # Drain the convergence history (best-effort: Redis problems must not
+        # block marking the scenario completed). Idempotent via ON CONFLICT.
+        try:
+            history = await _read_iteration_history(input.redis_channel)
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully
+            history = []
+            logging.getLogger(__name__).warning(
+                "Formation %s: failed to read iteration history: %s", input.scenario_id, exc
+            )
+        for iteration, best_value in history:
+            await session.execute(
+                text(
+                    "INSERT INTO formation_iterations (scenario_id, iteration, best_value) "
+                    "VALUES (CAST(:sid AS uuid), :it, :bv) "
+                    "ON CONFLICT (scenario_id, iteration) DO NOTHING"
+                ),
+                {"sid": input.scenario_id, "it": iteration, "bv": best_value},
+            )
+
         await session.execute(
             text(
                 "UPDATE formation_scenarios "
@@ -261,6 +298,15 @@ async def persist_formation_result_activity(input: PersistFormationInput) -> Non
             {"val": input.value, "sid": input.scenario_id},
         )
         await session.commit()
+
+        # Free the Redis stream now that history is durable in Postgres.
+        if input.redis_channel and _redis is not None:
+            try:
+                await _redis.delete(input.redis_channel)
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger(__name__).warning(
+                    "Formation %s: failed to delete Redis stream: %s", input.scenario_id, exc
+                )
 
 
 async def _async_heartbeat(data: dict) -> None:

@@ -89,3 +89,8 @@ class CompareScenario(BaseModel):
 
 class CompareResponse(BaseModel):
     scenarios: list[CompareScenario]
+
+
+class FormationIterationRead(BaseModel):
+    iteration: int
+    best_value: float

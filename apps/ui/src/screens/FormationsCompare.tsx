@@ -11,7 +11,8 @@ import {
   YAxis,
 } from 'recharts';
 
-import { compareFormations } from '@/api/formations';
+import { compareFormations, getIterations } from '@/api/formations';
+import IterationChart, { SERIES_PALETTE } from '@/components/IterationChart.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
 
@@ -30,6 +31,16 @@ export default function FormationsCompare() {
     enabled: ids.length > 0,
   });
 
+  // Convergence history per scenario, fetched in parallel.
+  const { data: itersById = {} } = useQuery({
+    queryKey: ['compare-iterations', ids],
+    queryFn: async () => {
+      const results = await Promise.all(ids.map((id) => getIterations(id)));
+      return Object.fromEntries(ids.map((id, i) => [id, results[i]]));
+    },
+    enabled: ids.length > 0,
+  });
+
   if (ids.length === 0) {
     return <p className="p-4 text-muted-foreground">Не вибрано сценаріїв для порівняння.</p>;
   }
@@ -44,6 +55,19 @@ export default function FormationsCompare() {
     Дохід: Math.round(s.total_revenue),
     Ресурс: Math.round(s.total_resource_used),
   }));
+
+  // One convergence line per scenario; scenarios without history are skipped
+  // from the chart (but stay in the totals comparison).
+  const convergenceSeries = scenarios
+    .map((s, i) => ({
+      name: s.name,
+      color: SERIES_PALETTE[i % SERIES_PALETTE.length],
+      data: (itersById[s.id] ?? []).map((it) => ({
+        iteration: it.iteration,
+        value: it.best_value,
+      })),
+    }))
+    .filter((srs) => srs.data.length > 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -125,9 +149,20 @@ export default function FormationsCompare() {
         </CardContent>
       </Card>
 
+      {convergenceSeries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Збіжність алгоритмів</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <IterationChart series={convergenceSeries} showLegend />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Графік порівняння</CardTitle>
+          <CardTitle>Графік порівняння підсумків</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={320}>

@@ -141,6 +141,16 @@ def upgrade() -> None:
     op.create_index("ix_formation_assignments_scenario_id", "formation_assignments", ["scenario_id"])
 
     op.create_table(
+        "formation_iterations",
+        sa.Column(
+            "scenario_id", _UUID,
+            sa.ForeignKey("formation_scenarios.id", ondelete="CASCADE"), primary_key=True,
+        ),
+        sa.Column("iteration", sa.Integer(), primary_key=True),
+        sa.Column("best_value", sa.Double(), nullable=False),
+    )
+
+    op.create_table(
         "formation_snapshots",
         sa.Column(
             "scenario_id", _UUID,
@@ -154,6 +164,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("formation_snapshots")
+    op.drop_table("formation_iterations")
     op.drop_table("formation_assignments")
     op.drop_table("formation_scenarios")
     op.drop_table("planning_cells")

@@ -395,3 +395,8 @@ export interface CompareScenario {
 export interface CompareResponse {
   scenarios: CompareScenario[];
 }
+
+export interface FormationIteration {
+  iteration: number;
+  best_value: number;
+}
