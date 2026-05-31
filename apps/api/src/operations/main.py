@@ -10,14 +10,11 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from src.operations.db.migrations import run_migrations
 from src.operations.routers import (
     auth,
-    experiments,
     formations,
-    jobs,
     planning,
     providers,
     service_groups,
     services,
-    solve,
 )
 from src.operations.temporal_types import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 
@@ -25,8 +22,6 @@ from src.operations.temporal_types import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAM
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Bring the information-system schema up to head before serving requests.
-    # The legacy /solve + /experiment* flow does not depend on the DB, but the
-    # new /api/* endpoints do.
     await run_migrations()
 
     app.state.temporal = await Client.connect(
@@ -54,9 +49,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(solve.router, prefix="/api")
-app.include_router(experiments.router, prefix="/api")
-app.include_router(jobs.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(services.router, prefix="/api")
 app.include_router(service_groups.router, prefix="/api")

@@ -12,9 +12,6 @@ import {
 } from '@/components/ui/dropdown-menu.tsx';
 import { useAuth } from '@/auth/AuthContext';
 
-const navLink =
-  'px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors';
-
 const SYSTEM_SECTIONS = [
   { to: '/services', label: 'Сервіси' },
   { to: '/service-groups', label: 'Групи сервісів' },
@@ -28,10 +25,6 @@ export default function Navbar() {
 
   return (
     <nav className="flex flex-wrap justify-center items-center gap-4 mb-8">
-      <Link to="/" className={navLink}>
-        Розв'язання
-      </Link>
-
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button className="gap-1">
@@ -47,12 +40,6 @@ export default function Navbar() {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-
-      {[1, 2, 3, 4].map((n) => (
-        <Link key={n} to={`/experiment${n}`} className={navLink}>
-          Експеримент {n}
-        </Link>
-      ))}
 
       <div className="ml-auto flex items-center gap-2">
         {user ? (

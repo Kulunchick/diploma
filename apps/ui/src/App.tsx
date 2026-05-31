@@ -1,15 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
 import Navbar from './components/Navbar.tsx'
 import { AuthProvider } from './auth/AuthContext.tsx'
 import RequireAuth from './auth/RequireAuth.tsx'
-import Solve from './screens/Solve.tsx'
-import Experiment1 from './screens/Experiment1.tsx'
-import Experiment2 from './screens/Experiment2.tsx'
-import Experiment3 from './screens/Experiment3.tsx'
-import Experiment4 from './screens/Experiment4.tsx'
 import Login from './screens/Login.tsx'
 import Register from './screens/Register.tsx'
 import Services from './screens/Services.tsx'
@@ -41,12 +36,8 @@ function App() {
             <Navbar />
 
             <Routes>
-              {/* Legacy, unauthenticated — unchanged */}
-              <Route path="/" element={<Solve />} />
-              <Route path="/experiment1" element={<Experiment1 />} />
-              <Route path="/experiment2" element={<Experiment2 />} />
-              <Route path="/experiment3" element={<Experiment3 />} />
-              <Route path="/experiment4" element={<Experiment4 />} />
+              {/* Home → formations (RequireAuth bounces anon users to /login). */}
+              <Route path="/" element={<Navigate to="/formations" replace />} />
 
               {/* Auth */}
               <Route path="/login" element={<Login />} />

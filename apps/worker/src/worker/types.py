@@ -3,13 +3,8 @@ from pydantic import BaseModel
 
 from shared.types import (  # noqa: F401 — re-exported for worker modules
     AntColonyParams,
-    AlgorithmResult,
-    ExperimentInput,
-    ExperimentResult,
     ProbabilisticParams,
     SingleSolveInput,
-    SolveInput,
-    SolveResult,
 )
 
 
@@ -33,16 +28,6 @@ class RunResult(BaseModel):
     value: float
     time_seconds: float
     solution: list[list[int]]
-
-
-class GenerateRunsInput(BaseModel):
-    experiment_type: str
-    params: dict
-
-
-class ExperimentVariantInput(BaseModel):
-    """Reference to one variant stored in Redis by the generator activity."""
-    index: int
 
 
 class PersistFormationInput(BaseModel):
