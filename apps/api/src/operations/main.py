@@ -12,6 +12,7 @@ from src.operations.routers import (
     auth,
     experiments,
     jobs,
+    planning,
     providers,
     service_groups,
     services,
@@ -59,6 +60,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(services.router, prefix="/api")
 app.include_router(service_groups.router, prefix="/api")
 app.include_router(providers.router, prefix="/api")
+app.include_router(planning.router, prefix="/api")
 
 
 if __name__ == "__main__":
