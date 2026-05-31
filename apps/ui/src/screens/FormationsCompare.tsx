@@ -1,3 +1,148 @@
+import { useQuery } from '@tanstack/react-query';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+
+import { compareFormations } from '@/api/formations';
+import { Button } from '@/components/ui/button.tsx';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
+
+const ALGO_LABEL: Record<string, string> = {
+  probabilistic: 'Ймовірнісно-жадібний',
+  ant_colony: 'Мурашиних колоній',
+};
+
 export default function FormationsCompare() {
-  return <div className="p-4 text-muted-foreground">FormationsCompare — у розробці</div>;
+  const [params] = useSearchParams();
+  const ids = (params.get('ids') ?? '').split(',').filter(Boolean);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['compare', ids],
+    queryFn: () => compareFormations(ids),
+    enabled: ids.length > 0,
+  });
+
+  if (ids.length === 0) {
+    return <p className="p-4 text-muted-foreground">Не вибрано сценаріїв для порівняння.</p>;
+  }
+  if (isLoading) return <p className="p-4 text-muted-foreground">Завантаження…</p>;
+  if (error || !data) {
+    return <p className="p-4 text-destructive">Не вдалося завантажити порівняння.</p>;
+  }
+
+  const scenarios = data.scenarios;
+  const chartData = scenarios.map((s) => ({
+    name: s.name,
+    Дохід: Math.round(s.total_revenue),
+    Ресурс: Math.round(s.total_resource_used),
+  }));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Порівняння сценаріїв</h2>
+        <Button variant="outline" asChild>
+          <Link to="/formations">До списку</Link>
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Підсумкові показники</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative w-full overflow-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="h-10 px-2 text-left font-medium text-muted-foreground">Показник</th>
+                  {scenarios.map((s) => (
+                    <th key={s.id} className="h-10 px-2 text-left font-medium">
+                      {s.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b">
+                  <td className="p-2 text-muted-foreground">Алгоритм</td>
+                  {scenarios.map((s) => (
+                    <td key={s.id} className="p-2">
+                      {ALGO_LABEL[s.algorithm] ?? s.algorithm}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-2 text-muted-foreground">Дохід IT-компанії (F)</td>
+                  {scenarios.map((s) => (
+                    <td key={s.id} className="p-2 font-medium">
+                      {s.value != null ? Math.round(s.value).toLocaleString('uk') : '—'}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-2 text-muted-foreground">Загальний дохід</td>
+                  {scenarios.map((s) => (
+                    <td key={s.id} className="p-2">
+                      {Math.round(s.total_revenue).toLocaleString('uk')}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b">
+                  <td className="p-2 text-muted-foreground">Використано ресурсу</td>
+                  {scenarios.map((s) => (
+                    <td key={s.id} className="p-2">
+                      {Math.round(s.total_resource_used).toLocaleString('uk')}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b align-top">
+                  <td className="p-2 text-muted-foreground">Призначення за провайдерами</td>
+                  {scenarios.map((s) => (
+                    <td key={s.id} className="p-2">
+                      <ul className="list-disc list-inside">
+                        {s.per_provider.map((pp) => (
+                          <li key={pp.provider_id}>
+                            <span className="font-medium">{pp.provider_name}</span> ({pp.assignment_count}):{' '}
+                            {pp.services.join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Графік порівняння</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="Дохід" fill="#2563eb" />
+              <Bar dataKey="Ресурс" fill="#16a34a" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
