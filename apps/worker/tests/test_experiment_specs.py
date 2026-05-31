@@ -9,10 +9,13 @@ For each spec:
 Random seeds are NOT controlled — values differ from legacy; only structure is verified.
 Experiment4 uses m==n to avoid the preserved omega-shape bug (n, m) vs (m, n).
 """
+import json
+
 import pytest
 from temporalio.testing import ActivityEnvironment, WorkflowEnvironment
 from temporalio.worker import Worker
 
+import worker.activities as activities
 from worker.activities import generate_experiment_runs_activity, run_algorithm_activity
 from worker.types import ExperimentInput, ExperimentResult, GenerateRunsInput
 from worker.workflows.experiment import ExperimentWorkflow
@@ -23,6 +26,15 @@ from worker.workflows.experiment import ExperimentWorkflow
 
 _RANGES = {"min": 1.0, "max": 10.0}
 _OMEGA = {"min": 0.0, "max": 0.5}
+
+
+async def _stored_runs() -> list[dict]:
+    """generate_experiment_runs_activity stores the full run list in Redis and
+    returns only the count, so read the stored list back to inspect variant keys."""
+    keys = await activities._redis.keys("experiment_runs:*")
+    assert keys, "no run list was stored in Redis"
+    raw = await activities._redis.get(keys[0])
+    return json.loads(raw)
 
 
 def _check_variant_structure(data: dict, variant_keys: list[str]) -> None:
@@ -63,7 +75,7 @@ async def _run_experiment(params: dict, exp_type: str) -> ExperimentResult:
 
 async def test_experiment1_generate_runs_count():
     env = ActivityEnvironment()
-    runs = await env.run(
+    count = await env.run(
         generate_experiment_runs_activity,
         GenerateRunsInput(experiment_type="experiment1", params={
             "count": 2, "m": 3, "n": 4,
@@ -73,10 +85,11 @@ async def test_experiment1_generate_runs_count():
         }),
     )
     # 2 count × 2 kmax × 2 algos = 8
-    assert len(runs) == 8
-    assert all(r.variant_key in ("50", "100") for r in runs)
+    assert count == 8
+    runs = await _stored_runs()
+    assert all(r["variant_key"] in ("50", "100") for r in runs)
     from collections import Counter
-    per_key = Counter(r.variant_key for r in runs)
+    per_key = Counter(r["variant_key"] for r in runs)
     assert per_key["50"] == 4
     assert per_key["100"] == 4
 
@@ -97,7 +110,7 @@ async def test_experiment1_workflow_structure():
 
 async def test_experiment2_generate_runs_count():
     env = ActivityEnvironment()
-    runs = await env.run(
+    count = await env.run(
         generate_experiment_runs_activity,
         GenerateRunsInput(experiment_type="experiment2", params={
             "count": 2, "m": 3, "n": 3,
@@ -106,8 +119,9 @@ async def test_experiment2_generate_runs_count():
             "cRange": _RANGES, "bRange": _RANGES, "omegaRange": _OMEGA,
         }),
     )
-    assert len(runs) == 8  # 2 × 2 × 2
-    assert all(r.variant_key in ("1.0", "2.0") for r in runs)
+    assert count == 8  # 2 × 2 × 2
+    runs = await _stored_runs()
+    assert all(r["variant_key"] in ("1.0", "2.0") for r in runs)
 
 
 async def test_experiment2_workflow_structure():
@@ -126,7 +140,7 @@ async def test_experiment2_workflow_structure():
 
 async def test_experiment3_generate_runs_count():
     env = ActivityEnvironment()
-    runs = await env.run(
+    count = await env.run(
         generate_experiment_runs_activity,
         GenerateRunsInput(experiment_type="experiment3", params={
             "count": 2,
@@ -135,8 +149,9 @@ async def test_experiment3_generate_runs_count():
             "cRange": _RANGES, "bRange": _RANGES, "omegaRange": _OMEGA,
         }),
     )
-    assert len(runs) == 8  # 2 × 2 × 2
-    assert all(r.variant_key in ("2x3", "3x3") for r in runs)
+    assert count == 8  # 2 × 2 × 2
+    runs = await _stored_runs()
+    assert all(r["variant_key"] in ("2x3", "3x3") for r in runs)
 
 
 async def test_experiment3_workflow_structure():
@@ -155,7 +170,7 @@ async def test_experiment3_workflow_structure():
 
 async def test_experiment4_generate_runs_count():
     env = ActivityEnvironment()
-    runs = await env.run(
+    count = await env.run(
         generate_experiment_runs_activity,
         GenerateRunsInput(experiment_type="experiment4", params={
             "count": 2, "m": 3, "n": 3,
@@ -165,8 +180,9 @@ async def test_experiment4_generate_runs_count():
             "cRange": _RANGES, "bRange": _RANGES,
         }),
     )
-    assert len(runs) == 8  # 2 × 2 × 2
-    assert all(r.variant_key in ("0.0-0.3", "0.5-0.9") for r in runs)
+    assert count == 8  # 2 × 2 × 2
+    runs = await _stored_runs()
+    assert all(r["variant_key"] in ("0.0-0.3", "0.5-0.9") for r in runs)
 
 
 async def test_experiment4_workflow_structure():
