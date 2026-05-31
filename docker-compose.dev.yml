@@ -139,8 +139,13 @@ services:
     container_name: dev-ui
     depends_on:
       - api
+    environment:
+      # Browser loads the SPA from :3000 but calls the API directly on :8000
+      # (dev nginx has no /api proxy). The API's default CORS allows :3000.
+      APP_API_BASE_URL: http://localhost:8000/api
     ports:
-      - "3000:80"
+      # nginx in the image listens on 8080 (non-root, matches k8s); map host 3000 → 8080.
+      - "3000:8080"
 
 volumes:
   appdb-data:
