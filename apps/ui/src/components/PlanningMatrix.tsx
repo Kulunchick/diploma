@@ -14,6 +14,7 @@ const FIELD_STEP: Record<PlanningField, { step: number; min: number; max?: numbe
   resource: { step: 1, min: 0 },
   provider_revenue: { step: 1, min: 0 },
   discount: { step: 0.05, min: 0, max: 0.99 },
+  min_value: { step: 0.05, min: 0 },
 };
 
 interface Props {

@@ -15,6 +15,7 @@ import type { FormationAlgorithm } from '@/api/types';
 export const ALGO_COLOR: Record<FormationAlgorithm, string> = {
   ant_colony: '#0f172a',
   probabilistic: '#2563eb',
+  combined: '#16a34a',
 };
 
 /** Distinct colours for comparing several scenarios on one chart. */

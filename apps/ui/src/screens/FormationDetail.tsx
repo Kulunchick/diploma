@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.tsx';
-import IterationChart from '@/components/IterationChart.tsx';
+import IterationChart, { ALGO_COLOR } from '@/components/IterationChart.tsx';
 import StatusBadge from '@/components/StatusBadge.tsx';
 import { ALGO_LABEL, formatParamValue, orderedParams } from '@/lib/algorithmParams';
 
@@ -150,7 +150,11 @@ export default function FormationDetail() {
           </CardHeader>
           <CardContent>
             <IterationChart
-              series={[{ name: ALGO_LABEL[d.algorithm], points: iterations }]}
+              series={[{
+                name: ALGO_LABEL[d.algorithm],
+                color: ALGO_COLOR[d.algorithm],
+                data: iterations.map((it) => ({ iteration: it.iteration, value: it.best_value })),
+              }]}
             />
           </CardContent>
         </Card>
