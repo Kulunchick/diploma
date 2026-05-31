@@ -88,6 +88,10 @@ class ServiceGroup(TimestampMixin, Base):
 
 class ServiceGroupMember(Base):
     __tablename__ = "service_group_members"
+    # A service belongs to at most one group (enables all-or-nothing aggregation).
+    __table_args__ = (
+        UniqueConstraint("service_id", name="uq_service_group_members_service_id"),
+    )
 
     group_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("service_groups.id", ondelete="CASCADE"), primary_key=True

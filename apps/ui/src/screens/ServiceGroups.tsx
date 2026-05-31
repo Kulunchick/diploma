@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
+import { cn } from '@/lib/utils';
 
 export default function ServiceGroups() {
   const qc = useQueryClient();
@@ -38,6 +39,17 @@ export default function ServiceGroups() {
   const [editing, setEditing] = useState<ServiceGroup | null>(null);
   const [name, setName] = useState('');
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
+
+  // A service may belong to at most one group — map each service already taken
+  // by another group to that group's name (excluding the one being edited).
+  const ownedByOther = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of groups) {
+      if (editing && g.id === editing.id) continue;
+      for (const mid of g.members) map.set(mid, g.name);
+    }
+    return map;
+  }, [groups, editing]);
 
   useEffect(() => {
     if (open) {
@@ -160,16 +172,39 @@ export default function ServiceGroups() {
             </div>
             <div className="flex flex-col gap-2">
               <Label>Сервіси групи</Label>
+              <p className="text-xs text-muted-foreground">
+                Сервіс може входити лише в одну групу.
+              </p>
               <div className="max-h-60 overflow-auto rounded-md border p-2 flex flex-col gap-2">
                 {services.length === 0 ? (
                   <span className="text-sm text-muted-foreground">Спершу додайте сервіси.</span>
                 ) : (
-                  services.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox checked={memberIds.has(s.id)} onCheckedChange={() => toggle(s.id)} />
-                      <span className="text-sm">{s.name}</span>
-                    </label>
-                  ))
+                  services.map((s) => {
+                    const owner = ownedByOther.get(s.id);
+                    const disabled = !!owner;
+                    return (
+                      <label
+                        key={s.id}
+                        title={disabled ? `Уже в групі «${owner}»` : undefined}
+                        className={cn(
+                          'flex items-center gap-2',
+                          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                        )}
+                      >
+                        <Checkbox
+                          checked={memberIds.has(s.id)}
+                          disabled={disabled}
+                          onCheckedChange={() => toggle(s.id)}
+                        />
+                        <span className="text-sm">
+                          {s.name}
+                          {disabled && (
+                            <span className="text-muted-foreground"> — у групі «{owner}»</span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })
                 )}
               </div>
             </div>

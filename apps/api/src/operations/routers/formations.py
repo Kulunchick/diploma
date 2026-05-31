@@ -18,6 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.operations.db.base import get_session
+from sqlalchemy.orm import selectinload
+
 from src.operations.db.models import (
     FormationAssignment,
     FormationScenario,
@@ -25,6 +27,7 @@ from src.operations.db.models import (
     PlanningCell,
     Provider,
     Service,
+    ServiceGroup,
     User,
 )
 from src.operations.models.algorithm_parametrs import (
@@ -67,40 +70,102 @@ _TERMINAL_FAILED = {
 # ---------------------------------------------------------------------------
 
 def _build_payload(
-    services: list[Service], providers: list[Provider], cells: list[PlanningCell]
+    services: list[Service],
+    providers: list[Provider],
+    cells: list[PlanningCell],
+    groups: list[ServiceGroup],
 ) -> dict:
-    """Build the solver payload from saved entities in a deterministic order
-    (services by name ASC, providers by name ASC). Missing cells default to 0.
+    """Build the solver payload from saved entities, aggregating service groups
+    into "logical units" so the group all-or-nothing rule is enforced without
+    touching the Rust solver.
 
-    Solver subtask A operates on integer prices/resources per the article
-    §5.1; NUMERIC storage allows future precision but is truncated at the
-    boundary (price → int, resource → int, b_total → int). Discounts (omega)
-    stay float.
+    A unit is either a whole service_group (services share one solver variable
+    per provider → all-or-nothing) or a single ungrouped service. Units are
+    ordered by their alphabetically-first service name, providers by name.
+
+    Solver subtask A operates on integer prices/resources per the article §5.1;
+    NUMERIC storage allows future precision but is truncated at the boundary
+    (price → int, resource → int, b_total → int). Discounts stay float.
+
+    Per (unit, provider):
+        c_unit     = Σ price_i
+        b_unit     = Σ resource_i
+        omega_unit = Σ(discount_i·price_i) / c_unit   (price-weighted, 0 if c=0)
+    so (1 − omega_unit)·c_unit == Σ(1 − discount_i)·price_i exactly, keeping the
+    solver objective consistent with the per-service revenue we report.
     """
     by_pair = {(c.service_id, c.provider_id): c for c in cells}
-    m, n = len(services), len(providers)
+    service_by_id = {s.id: s for s in services}
 
+    # Per-service planning vectors aligned to provider order (truncated to int).
+    service_cells: dict[str, dict] = {}
+    for s in services:
+        price, resource, discount, prov_rev = [], [], [], []
+        for p in providers:
+            cell = by_pair.get((s.id, p.id))
+            price.append(int(cell.price) if cell else 0)
+            resource.append(int(cell.resource) if cell else 0)
+            discount.append(float(cell.discount) if cell else 0.0)
+            prov_rev.append(float(cell.provider_revenue) if cell else 0.0)
+        service_cells[str(s.id)] = {
+            "name": s.name,
+            "price": price,
+            "resource": resource,
+            "discount": discount,
+            "provider_revenue": prov_rev,  # stored for the future combined method
+        }
+
+    # Partition services into units: one per group, one per ungrouped service.
+    grouped: set[uuid.UUID] = set()
+    units: list[dict] = []
+    for g in groups:
+        member_ids = [m.id for m in g.members if m.id in service_by_id]
+        if not member_ids:
+            continue
+        grouped.update(member_ids)
+        units.append(
+            {"unit_id": str(g.id), "display_name": g.name,
+             "service_ids": [str(i) for i in member_ids], "is_group": True}
+        )
+    for s in services:
+        if s.id in grouped:
+            continue
+        units.append(
+            {"unit_id": str(s.id), "display_name": s.name,
+             "service_ids": [str(s.id)], "is_group": False}
+        )
+
+    units.sort(key=lambda u: min(service_cells[sid]["name"] for sid in u["service_ids"]))
+
+    # Aggregate matrices over units.
+    n = len(providers)
     c_matrix: list[list[int]] = []
     b_ij: list[list[int]] = []
     omega: list[list[float]] = []
-    for s in services:
+    for u in units:
         c_row, b_row, o_row = [], [], []
-        for p in providers:
-            cell = by_pair.get((s.id, p.id))
-            c_row.append(int(cell.price) if cell else 0)
-            b_row.append(int(cell.resource) if cell else 0)
-            o_row.append(float(cell.discount) if cell else 0.0)
+        for j in range(n):
+            c_unit = sum(service_cells[sid]["price"][j] for sid in u["service_ids"])
+            b_unit = sum(service_cells[sid]["resource"][j] for sid in u["service_ids"])
+            disc_weighted = sum(
+                service_cells[sid]["discount"][j] * service_cells[sid]["price"][j]
+                for sid in u["service_ids"]
+            )
+            c_row.append(c_unit)
+            b_row.append(b_unit)
+            o_row.append(disc_weighted / c_unit if c_unit > 0 else 0.0)
         c_matrix.append(c_row)
         b_ij.append(b_row)
         omega.append(o_row)
 
     return {
-        "m": m,
+        "m": len(units),
         "n": n,
         "c": c_matrix,
         "b_ij": b_ij,
         "omega": omega,
-        "service_order": [str(s.id) for s in services],
+        "service_cells": service_cells,
+        "unit_order": units,
         "provider_order": [str(p.id) for p in providers],
     }
 
@@ -161,14 +226,28 @@ async def _build_detail(
     )
     assignments = list(assignments_result.scalars().all())
 
-    # Resolve names + resource_used (from the frozen snapshot b_ij).
-    service_idx: dict[str, int] = {}
+    # Resolve provider index + per-service resource and group membership from
+    # the snapshot. Supports both the unit-aggregated format (service_order is a
+    # list of unit dicts + input_payload.service_cells) and the older per-service
+    # format (service_order is a list of ids + input_payload.b_ij).
     provider_idx: dict[str, int] = {}
-    b_ij: list[list[int]] = []
+    service_cells: dict | None = None
+    group_name_by_service: dict[str, str] = {}
+    old_service_idx: dict[str, int] = {}
+    old_b_ij: list[list[int]] = []
     if snapshot:
-        service_idx = {sid: i for i, sid in enumerate(snapshot.service_order)}
         provider_idx = {pid: j for j, pid in enumerate(snapshot.provider_order)}
-        b_ij = snapshot.input_payload.get("b_ij", [])
+        payload = snapshot.input_payload or {}
+        service_cells = payload.get("service_cells")
+        order = snapshot.service_order or []
+        if order and isinstance(order[0], dict):  # unit format
+            for unit in order:
+                if unit.get("is_group"):
+                    for sid in unit["service_ids"]:
+                        group_name_by_service[sid] = unit["display_name"]
+        else:  # legacy per-service format
+            old_service_idx = {sid: i for i, sid in enumerate(order)}
+            old_b_ij = payload.get("b_ij", [])
 
     name_rows = await session.execute(
         select(Service.id, Service.name).where(Service.owner_id == scenario.owner_id)
@@ -179,15 +258,24 @@ async def _build_detail(
     )
     provider_names = {pid: name for pid, name in prov_rows.all()}
 
+    def resource_used_for(service_id: str, j: int | None) -> float:
+        if j is None:
+            return 0.0
+        if service_cells is not None:
+            res = service_cells.get(service_id, {}).get("resource", [])
+            return float(res[j]) if j < len(res) else 0.0
+        if old_b_ij:
+            i = old_service_idx.get(service_id)
+            if i is not None and i < len(old_b_ij) and j < len(old_b_ij[i]):
+                return float(old_b_ij[i][j])
+        return 0.0
+
     rows: list[FormationAssignmentRead] = []
     total_revenue = 0.0
     total_resource = 0.0
     for a in assignments:
-        i = service_idx.get(str(a.service_id))
         j = provider_idx.get(str(a.provider_id))
-        resource_used = (
-            float(b_ij[i][j]) if i is not None and j is not None and b_ij else 0.0
-        )
+        resource_used = resource_used_for(str(a.service_id), j)
         eff = float(a.effective_revenue or 0)
         total_revenue += eff
         total_resource += resource_used
@@ -201,10 +289,12 @@ async def _build_detail(
                 discount=float(a.discount or 0),
                 effective_revenue=eff,
                 resource_used=resource_used,
+                group_name=group_name_by_service.get(str(a.service_id)),
             )
         )
 
-    rows.sort(key=lambda r: (r.provider_name, r.service_name))
+    # Cluster by provider, then by group, then by service name.
+    rows.sort(key=lambda r: (r.provider_name, r.group_name or "", r.service_name))
     totals = FormationTotals(
         total_revenue=total_revenue,
         total_resource_used=total_resource,
@@ -272,8 +362,16 @@ async def create_formation(
             select(PlanningCell).where(PlanningCell.owner_id == user.id)
         )).scalars().all()
     )
+    groups = list(
+        (await session.execute(
+            select(ServiceGroup)
+            .where(ServiceGroup.owner_id == user.id)
+            .options(selectinload(ServiceGroup.members))
+            .order_by(ServiceGroup.name)
+        )).scalars().all()
+    )
 
-    payload = _build_payload(services, providers, cells)
+    payload = _build_payload(services, providers, cells, groups)
     b_total = int(body.b_total)
 
     scenario = FormationScenario(
@@ -296,8 +394,11 @@ async def create_formation(
             "b_ij": payload["b_ij"],
             "omega": payload["omega"],
             "b_total": b_total,
+            # Per-service vectors for result expansion (units → service rows).
+            "service_cells": payload["service_cells"],
         },
-        service_order=payload["service_order"],
+        # service_order column now holds the unit partition.
+        service_order=payload["unit_order"],
         provider_order=payload["provider_order"],
     )
     session.add(snapshot)

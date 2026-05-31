@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.operations.db.base import get_session
-from src.operations.db.models import Service, ServiceGroup, User
+from src.operations.db.models import Service, ServiceGroup, ServiceGroupMember, User
 from src.operations.models.service_group import (
     ServiceGroupCreate,
     ServiceGroupRead,
@@ -37,7 +37,10 @@ def _to_read(group: ServiceGroup) -> ServiceGroupRead:
 
 
 async def _resolve_members(
-    member_ids: list[uuid.UUID], session: AsyncSession, user: User
+    member_ids: list[uuid.UUID],
+    session: AsyncSession,
+    user: User,
+    exclude_group_id: uuid.UUID | None = None,
 ) -> list[Service]:
     if not member_ids:
         return []
@@ -50,6 +53,32 @@ async def _resolve_members(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="One or more member services do not exist",
+        )
+
+    # A service may belong to at most one group (enforced by a DB UNIQUE
+    # constraint too — this surfaces a friendly error instead of an IntegrityError).
+    conds = [
+        ServiceGroupMember.service_id.in_(unique_ids),
+        ServiceGroup.owner_id == user.id,
+    ]
+    if exclude_group_id is not None:
+        conds.append(ServiceGroup.id != exclude_group_id)
+    conflicts = (
+        await session.execute(
+            select(Service.name, ServiceGroup.name)
+            .join(ServiceGroupMember, ServiceGroupMember.service_id == Service.id)
+            .join(ServiceGroup, ServiceGroup.id == ServiceGroupMember.group_id)
+            .where(*conds)
+        )
+    ).all()
+    if conflicts:
+        svc_name, grp_name = conflicts[0]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Service '{svc_name}' already belongs to group '{grp_name}' "
+                "(a service may belong to at most one group)"
+            ),
         )
     return services
 
@@ -121,7 +150,9 @@ async def update_service_group(
 ) -> ServiceGroupRead:
     group = await _get_owned(group_id, session, user)
     group.name = body.name
-    group.members = await _resolve_members(body.member_ids, session, user)
+    group.members = await _resolve_members(
+        body.member_ids, session, user, exclude_group_id=group.id
+    )
     try:
         await session.commit()
     except IntegrityError:

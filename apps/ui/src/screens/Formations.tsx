@@ -174,6 +174,10 @@ export default function Formations() {
                   <span className="text-sm">Мурашиних колоній</span>
                 </label>
               </RadioGroup>
+              <p className="text-xs text-muted-foreground">
+                Сервіси, об'єднані у групу, формують пакет за принципом «усе або нічого»:
+                для провайдера вони включаються або разом, або не включаються взагалі.
+              </p>
             </div>
 
             {algorithm === 'probabilistic' ? (

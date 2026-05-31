@@ -70,6 +70,9 @@ def upgrade() -> None:
             "service_id", _UUID,
             sa.ForeignKey("services.id", ondelete="CASCADE"), primary_key=True,
         ),
+        # A service belongs to at most one group — enables all-or-nothing group
+        # aggregation in formation preprocessing.
+        sa.UniqueConstraint("service_id", name="uq_service_group_members_service_id"),
     )
 
     op.create_table(

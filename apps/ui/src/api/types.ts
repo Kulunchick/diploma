@@ -347,6 +347,8 @@ export interface FormationAssignment {
   discount: number;
   effective_revenue: number;
   resource_used: number;
+  /** Set when the service was assigned as part of a group (all-or-nothing). */
+  group_name: string | null;
 }
 
 export interface FormationTotals {

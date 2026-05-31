@@ -42,6 +42,8 @@ class FormationAssignmentRead(BaseModel):
     discount: float
     effective_revenue: float
     resource_used: float
+    # Set when the service was assigned as part of a group (all-or-nothing unit).
+    group_name: str | None = None
 
 
 class FormationTotals(BaseModel):

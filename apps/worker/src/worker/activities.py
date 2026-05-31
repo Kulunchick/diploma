@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from typing import Optional
 
@@ -184,13 +185,15 @@ def _maybe_json(value):
 
 @activity.defn
 async def persist_formation_result_activity(input: PersistFormationInput) -> None:
-    """Write a finished formation back to Postgres: one assignment row per
-    selected (service, provider) pair plus the scenario value/status.
+    """Write a finished formation back to Postgres, expanding the unit-level
+    solution into per-service assignment rows.
 
-    Resolved numbers (price, discount, effective_revenue) are taken from the
-    frozen snapshot so totals reconcile with the solver's value
-    (F = ΣΣ (1 - r_ij)·d_ij·v_ij) and stay reproducible if the catalogue
-    changes later. Idempotent: clears prior assignments before inserting.
+    The solution matrix has shape (num_units, num_providers). For every selected
+    (unit, provider) it writes one row per service in that unit, using the
+    service's individual price/discount from the frozen snapshot
+    (effective_revenue = price·(1 − discount)). Because group aggregation used a
+    price-weighted omega, Σ effective_revenue equals the solver's value — a
+    divergence > 1e-6 is logged (not fatal). Idempotent: clears prior rows first.
     """
     async with AsyncSessionLocal() as session:
         snap = (
@@ -206,39 +209,48 @@ async def persist_formation_result_activity(input: PersistFormationInput) -> Non
             raise RuntimeError(f"Snapshot not found for scenario {input.scenario_id}")
 
         payload = _maybe_json(snap[0])
-        service_order = _maybe_json(snap[1])
+        unit_order = _maybe_json(snap[1])
         provider_order = _maybe_json(snap[2])
-        c = payload["c"]
-        omega = payload["omega"]
+        service_cells = payload["service_cells"]
 
         await session.execute(
             text("DELETE FROM formation_assignments WHERE scenario_id = CAST(:sid AS uuid)"),
             {"sid": input.scenario_id},
         )
 
-        for i, row in enumerate(input.solution):
-            for j, v in enumerate(row):
+        total_eff = 0.0
+        for u_index, unit in enumerate(unit_order):
+            for j, v in enumerate(input.solution[u_index]):
                 if v != 1:
                     continue
-                price = float(c[i][j])
-                discount = float(omega[i][j])
-                effective_revenue = (1.0 - discount) * price
-                await session.execute(
-                    text(
-                        "INSERT INTO formation_assignments "
-                        "(scenario_id, service_id, provider_id, price, discount, effective_revenue) "
-                        "VALUES (CAST(:sid AS uuid), CAST(:svc AS uuid), CAST(:prov AS uuid), "
-                        ":price, :discount, :eff)"
-                    ),
-                    {
-                        "sid": input.scenario_id,
-                        "svc": service_order[i],
-                        "prov": provider_order[j],
-                        "price": price,
-                        "discount": discount,
-                        "eff": effective_revenue,
-                    },
-                )
+                for service_id in unit["service_ids"]:
+                    sc = service_cells[service_id]
+                    price = float(sc["price"][j])
+                    discount = float(sc["discount"][j])
+                    effective_revenue = (1.0 - discount) * price
+                    total_eff += effective_revenue
+                    await session.execute(
+                        text(
+                            "INSERT INTO formation_assignments "
+                            "(scenario_id, service_id, provider_id, price, discount, effective_revenue) "
+                            "VALUES (CAST(:sid AS uuid), CAST(:svc AS uuid), CAST(:prov AS uuid), "
+                            ":price, :discount, :eff)"
+                        ),
+                        {
+                            "sid": input.scenario_id,
+                            "svc": service_id,
+                            "prov": provider_order[j],
+                            "price": price,
+                            "discount": discount,
+                            "eff": effective_revenue,
+                        },
+                    )
+
+        if abs(total_eff - input.value) > 1e-6:
+            logging.getLogger(__name__).warning(
+                "Formation %s: Σ effective_revenue (%.6f) diverges from solver value (%.6f)",
+                input.scenario_id, total_eff, input.value,
+            )
 
         await session.execute(
             text(

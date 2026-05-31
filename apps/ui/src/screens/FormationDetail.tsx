@@ -10,6 +10,7 @@ import {
   listFormations,
 } from '@/api/formations';
 import type { FormationAssignment } from '@/api/types';
+import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
 import { Checkbox } from '@/components/ui/checkbox.tsx';
@@ -153,7 +154,16 @@ export default function FormationDetail() {
                   <TableBody>
                     {rows.map((a) => (
                       <TableRow key={a.service_id}>
-                        <TableCell className="font-medium">{a.service_name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {a.service_name}
+                            {a.group_name && (
+                              <Badge variant="outline" className="font-normal">
+                                у складі групи «{a.group_name}»
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>{fmt(a.price)}</TableCell>
                         <TableCell>{a.discount}</TableCell>
                         <TableCell>{fmt(a.effective_revenue)}</TableCell>
