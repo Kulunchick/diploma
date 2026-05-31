@@ -2,4 +2,7 @@
 // пакетів сервісів для провайдерів інфокомунікацій.
 
 pub mod ant_colony;
+pub mod combined;
 pub mod probabilistic;
+pub mod subtask_a;
+pub mod subtask_b;

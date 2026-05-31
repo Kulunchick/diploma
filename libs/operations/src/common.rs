@@ -99,3 +99,76 @@ pub fn construct_solution(
 
     x
 }
+
+/// Будує один допустимий розв'язок із додатковим предикатом допустимості пари.
+///
+/// Як `construct_solution`, але пара (i, j) потрапляє до множини дозволених лише
+/// якщо `admissible(i, j)` теж істинне — це дозволяє врахувати обмеження (4)
+/// (відносна цінність сервісу для провайдера) у комбінованому методі.
+pub fn construct_solution_with<F>(
+    b_ij: &Array2<i64>,
+    b_total: i64,
+    score: &Array2<f64>,
+    admissible: F,
+) -> Array2<i64>
+where
+    F: Fn(usize, usize) -> bool,
+{
+    let (m, n) = (b_ij.shape()[0], b_ij.shape()[1]);
+    let mut rng = rand::rng();
+    let mut x = Array2::<i64>::zeros((m, n));
+    let mut t_used: i64 = 0;
+
+    loop {
+        let mut allowed_indices = Vec::with_capacity(m * n);
+        let mut weights = Vec::with_capacity(m * n);
+
+        for i in 0..m {
+            for j in 0..n {
+                if x[[i, j]] == 0
+                    && t_used + b_ij[[i, j]] <= b_total
+                    && admissible(i, j)
+                {
+                    let w = score[[i, j]];
+                    if w > 0.0 {
+                        allowed_indices.push((i, j));
+                        weights.push(w);
+                    }
+                }
+            }
+        }
+
+        if allowed_indices.is_empty() {
+            break;
+        }
+
+        if let Ok(dist) = WeightedIndex::new(&weights) {
+            let choice = dist.sample(&mut rng);
+            let (i, j) = allowed_indices[choice];
+            x[[i, j]] = 1;
+            t_used += b_ij[[i, j]];
+        } else {
+            break;
+        }
+    }
+
+    x
+}
+
+/// Загальна зважена цільова функція: ΣΣ (1 − r_ij) · value_ij · v_ij.
+///
+/// Використовується комбінованим методом для обох критеріїв — для IT-компанії
+/// (value = d_ij, дохід F_IT) і для провайдерів (value = p_ij, дохід F_prov) —
+/// з довільною матрицею знижок r (яка в комбінованому методі є змінною).
+pub fn weighted_objective(v: &Array2<i64>, value: &Array2<i64>, r: &Array2<f64>) -> f64 {
+    Zip::from(v)
+        .and(value)
+        .and(r)
+        .fold(0.0, |acc, &v_val, &val, &r_val| {
+            if v_val == 1 {
+                acc + (1.0 - r_val) * val as f64
+            } else {
+                acc
+            }
+        })
+}

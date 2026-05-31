@@ -9,12 +9,15 @@
 // Комбінований метод формування пакетів сервісів (зі статті) у цій збірці
 // не реалізовано — він буде доданий в наступних версіях інформаційної системи.
 
+mod combined_task;
 mod common;
 mod solvers;
 mod task;
 
 use pyo3::prelude::*;
+use combined_task::CombinedTask;
 use solvers::ant_colony::AntColonyAssignmentSolver;
+use solvers::combined::CombinedSolver;
 use solvers::probabilistic::ProbabilisticAssignmentSolver;
 use task::Task;
 
@@ -23,5 +26,8 @@ fn assignment_solver(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Task>()?;
     m.add_class::<AntColonyAssignmentSolver>()?;
     m.add_class::<ProbabilisticAssignmentSolver>()?;
+    // Комбінований метод (розділи 4–5 статті).
+    m.add_class::<CombinedTask>()?;
+    m.add_class::<CombinedSolver>()?;
     Ok(())
 }
