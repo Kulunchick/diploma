@@ -7,12 +7,18 @@ from redis.asyncio import Redis
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 
+from src.operations.db.migrations import run_migrations
 from src.operations.routers import experiments, jobs, solve
 from src.operations.temporal_types import REDIS_URL, TEMPORAL_HOST, TEMPORAL_NAMESPACE
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Bring the information-system schema up to head before serving requests.
+    # The legacy /solve + /experiment* flow does not depend on the DB, but the
+    # new /api/* endpoints do.
+    await run_migrations()
+
     app.state.temporal = await Client.connect(
         TEMPORAL_HOST,
         namespace=TEMPORAL_NAMESPACE,

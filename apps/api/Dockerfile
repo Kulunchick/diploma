@@ -55,5 +55,9 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY apps/api/src src
+# Alembic config + migrations live at the api root (next to src), so the
+# startup hook and `alembic upgrade head` resolve them inside the container.
+COPY apps/api/alembic.ini ./alembic.ini
+COPY apps/api/alembic ./alembic
 
 CMD ["python", "-m", "src.operations.main"]
