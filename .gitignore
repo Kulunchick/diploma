@@ -32,10 +32,18 @@ apps/ui/dist/
 .DS_Store
 Thumbs.db
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code local settings + memory
+.claude/
+
+# Playwright MCP test artifacts
+.playwright-mcp/
+
+# Word documents in docs/ (thesis drafts — tracked separately)
+docs/*.docx
 
 # Environment
 .env
 .env.*
 !.env.example
+.mcp.json
+.claude
