@@ -7,7 +7,10 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# Use npm install instead of npm ci: the lock file is generated on Windows so
+# optional platform-specific packages (@emnapi/*) for Linux Alpine are absent,
+# causing npm ci to fail. npm install resolves the correct platform packages.
+RUN npm install
 
 COPY . .
 RUN npm run build
