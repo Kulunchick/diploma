@@ -148,7 +148,12 @@ def _build_payload(
 
     # Aggregate matrices over units. p_ij (Σ provider_revenue) and s_ij (max
     # threshold over the unit — the strictest the provider applies to any
-    # service in the bundle) feed the combined method; cheap to always compute.
+    # service in the bundle) feed constraint (4) for ALL THREE algorithms now.
+    # Admissibility is evaluated at the unit (aggregated) level — the unit is the
+    # atom — using the aggregated s, p, c and the unit discount, not per member:
+    #     s_unit · (1 − r_unit) · c_unit ≤ p_unit
+    # so a whole group is admissible-or-not as one, consistent with how its
+    # resource/price/discount are aggregated.
     n = len(providers)
     c_matrix: list[list[int]] = []
     b_ij: list[list[int]] = []
@@ -522,6 +527,11 @@ async def create_formation(
                 algorithm=body.algorithm,
                 ant_colony=ant,
                 probabilistic=prob,
+                # Constraint (4) is now enforced for probabilistic/ant-colony too,
+                # at the planning discount (omega). p_ij/s_ij come from the same
+                # aggregation as the combined branch (see _build_payload).
+                p_ij=payload["p_ij"],
+                s_ij=payload["s_ij"],
                 scenario_id=str(scenario.id),
                 redis_channel=redis_channel,
             ),

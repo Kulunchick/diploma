@@ -54,10 +54,14 @@ class SingleSolveInput(BaseModel):
     c: list[list[int]]
     b_ij: list[list[int]]
     b_total: int
-    omega: list[list[float]]
+    omega: list[list[float]]  # planning discount r_ij
     algorithm: str  # "ant_colony" | "probabilistic"
     ant_colony: AntColonyParams = AntColonyParams()
     probabilistic: ProbabilisticParams = ProbabilisticParams()
+    # Constraint (4): provider revenue p_ij and relative-value thresholds s_ij.
+    # Enforced for these two algorithms too (admissibility at the planning r).
+    p_ij: list[list[int]] | None = None
+    s_ij: list[list[float]] | None = None
     scenario_id: str
     redis_channel: str | None = None
 

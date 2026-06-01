@@ -17,12 +17,17 @@ class RunAlgorithmInput(BaseModel):
     c: list[list[float]]
     b_ij: list[list[float]]
     b_total: int
-    omega: list[list[float]]
+    omega: list[list[float]]  # planning discount r_ij (the discount these solvers use)
     algorithm: str  # "ant_colony" | "probabilistic"
     ant_colony_params: Optional[AntColonyParams] = None
     probabilistic_params: Optional[ProbabilisticParams] = None
     variant_key: str
     redis_channel: Optional[str] = None
+    # Constraint (4) inputs (provider revenue p_ij + relative-value thresholds
+    # s_ij). Optional for back-compat: when omitted both default to zeros, so
+    # s = 0 → every pair admissible (behaviour identical to pre-(4)).
+    p_ij: Optional[list[list[int]]] = None
+    s_ij: Optional[list[list[float]]] = None
 
 
 class RunResult(BaseModel):

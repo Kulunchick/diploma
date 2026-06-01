@@ -106,7 +106,7 @@ impl CombinedTask {
     /// допустимість — це й є важіль поступок стадії 3. Множникову форму обрано,
     /// щоб коректно обробити d_ij = 0 (безкоштовний сервіс): 0 ≤ p_ij — істина.
     pub fn admissible(&self, i: usize, j: usize, r: f64) -> bool {
-        self.s_ij[[i, j]] * (1.0 - r) * self.c[[i, j]] as f64 <= self.p_ij[[i, j]] as f64
+        crate::common::is_admissible(self.s_ij[[i, j]], r, self.c[[i, j]], self.p_ij[[i, j]])
     }
 
     /// Використаний ресурс ΣΣ β_ij · v_ij для розв'язку v.

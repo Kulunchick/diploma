@@ -17,8 +17,8 @@ use numpy::{PyArray, Ix2, ToPyArray};
 use pyo3::{prelude::*, types::PyDict};
 use rayon::prelude::*;
 
-use crate::common::{construct_solution, heuristic, objective};
-use crate::task::Task;
+use crate::combined_task::CombinedTask;
+use crate::common::{construct_solution_with, heuristic, objective};
 
 #[pyclass]
 pub struct ProbabilisticAssignmentSolver {
@@ -50,12 +50,15 @@ impl ProbabilisticAssignmentSolver {
     pub fn solve<'py>(
         &self,
         py: Python<'py>,
-        task: &'py Task,
+        task: &'py CombinedTask,
     ) -> PyResult<(Bound<'py, PyArray<i64, Ix2>>, f64)> {
         // Цінність одиниці ресурсу θ_ij для кожної пари «сервіс–провайдер»
         // обчислюється один раз — у ймовірнісно-жадібному алгоритмі вона
-        // не змінюється від ітерації до ітерації.
-        let score = heuristic(&task.c, &task.b_ij, &task.omega);
+        // не змінюється від ітерації до ітерації. r = планова знижка (omega_max).
+        let score = heuristic(&task.c, &task.b_ij, &task.omega_max);
+        // Обмеження (4): недопустимі пари (s·(1−r)·d > p) виключаються з вибору на
+        // кожному кроці. При s = 0 допустимі всі — поведінка як до введення (4).
+        let admissible = |i: usize, j: usize| task.admissible(i, j, task.omega_max[[i, j]]);
 
         let mut f_best = 0.0_f64;
         let mut x_best = Array2::<i64>::zeros((task.m, task.n));
@@ -64,8 +67,8 @@ impl ProbabilisticAssignmentSolver {
             // Послідовний режим: викликаємо callback з поточним рекордом
             // після кожної ітерації, щоб клієнт міг відображати прогрес.
             for k in 0..self.kmax {
-                let x = construct_solution(&task.b_ij, task.b_total, &score);
-                let f = objective(&x, &task.c, &task.omega);
+                let x = construct_solution_with(&task.b_ij, task.b_total, &score, admissible);
+                let f = objective(&x, &task.c, &task.omega_max);
 
                 if f > f_best {
                     f_best = f;
@@ -85,8 +88,8 @@ impl ProbabilisticAssignmentSolver {
             let solutions: Vec<(Array2<i64>, f64)> = (0..self.kmax)
                 .into_par_iter()
                 .map(|_| {
-                    let x = construct_solution(&task.b_ij, task.b_total, &score);
-                    let f = objective(&x, &task.c, &task.omega);
+                    let x = construct_solution_with(&task.b_ij, task.b_total, &score, admissible);
+                    let f = objective(&x, &task.c, &task.omega_max);
                     (x, f)
                 })
                 .collect();

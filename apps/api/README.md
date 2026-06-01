@@ -86,10 +86,13 @@ benefit `F_IT + F_prov`, not optimal for either side alone. Full write-up:
 | `ignore_discounts` | false | — | drop the planning discount ceiling (use `omega_max = 0.95`) |
 | `local_search_restarts` | 0 | ≥ 0 | extra perturbed stage-3 restarts |
 
-**New planning field `min_value` (s_ij)** — the provider's minimum relative
-value, used only by constraint (4): `s_ij · (1 − r_ij) · d_ij ≤ p_ij` (provider
-revenue ≥ s_ij × discounted price paid). `s_ij = 0` disables it, so the other two
-algorithms are unaffected.
+**Planning field `min_value` (s_ij)** — the provider's minimum relative value,
+used by constraint (4): `s_ij · (1 − r_ij) · d_ij ≤ p_ij` (provider revenue ≥
+s_ij × discounted price paid). As of this version it is enforced in **all three
+algorithms** — probabilistic and ant-colony evaluate it at the planning discount,
+the combined method at its negotiated discount — so inadmissible (provider-
+unprofitable) pairs are excluded from every method. `s_ij = 0` disables it, so
+scenarios with zero s_ij behave exactly as before.
 
 **Combined-only response fields** on `GET /api/formations/{id}`: `provider_value`
 (=F_prov), `combined_source` (`subtask_a_improved`|`subtask_b_improved`),

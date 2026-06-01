@@ -33,7 +33,12 @@ _WORKER_SRC = Path(__file__).resolve().parents[3] / "apps" / "worker" / "src"
 if str(_WORKER_SRC) not in sys.path:
     sys.path.insert(0, str(_WORKER_SRC))
 
-from assignment_solver import CombinedSolver, CombinedTask  # noqa: E402
+from assignment_solver import (  # noqa: E402
+    AntColonyAssignmentSolver,
+    CombinedSolver,
+    CombinedTask,
+    ProbabilisticAssignmentSolver,
+)
 
 # --- concession-demonstrating fixture (4 units × 2 providers) ---------------
 C = np.array([[1000, 1000], [300, 300], [700, 700], [250, 250]], dtype=np.int64)
@@ -160,6 +165,43 @@ def test_ignore_discounts_stays_feasible():
         for j in range(2):
             if v[i, j] == 1:
                 assert _admissible(i, j, r[i, j])
+
+
+# ---------------------------------------------------------------------------
+# Constraint (4) is enforced in ALL THREE solvers via the shared is_admissible.
+# ---------------------------------------------------------------------------
+
+def _admis_task(s_unit0: float) -> CombinedTask:
+    """2 units × 1 provider. Unit 0 is high-value for the IT-company (d=100) but
+    its provider revenue is tiny (p=10); a high s_unit0 makes it inadmissible
+    (s·(1−r)·d = s·100 > 10). Unit 1 is always admissible (s=0). Both fit T."""
+    c = np.array([[100], [10]], dtype=np.int64)
+    b = np.array([[5], [5]], dtype=np.int64)
+    p = np.array([[10], [100]], dtype=np.int64)
+    om = np.array([[0.0], [0.0]])
+    s = np.array([[s_unit0], [0.0]])
+    return CombinedTask(2, 1, c, b, p, om, s, 10)
+
+
+def test_constraint4_enforced_in_all_three_solvers():
+    """With s high enough to bind, the inadmissible pair (0,0) is never assigned
+    by probabilistic, ant-colony OR combined — one shared admissibility rule."""
+    task = _admis_task(2.0)  # 2·1·100 = 200 > p=10 → inadmissible
+    prob = np.array(ProbabilisticAssignmentSolver(100).solve(task)[0])
+    ant = np.array(AntColonyAssignmentSolver(num_ants=10, kmax=30).solve(task)[0])
+    comb = np.array(CombinedSolver(100, 0.05, 0).solve(task)["v_final"])
+    for v, name in [(prob, "probabilistic"), (ant, "ant_colony"), (comb, "combined")]:
+        assert v[0, 0] == 0, f"{name} assigned an inadmissible pair (constraint 4)"
+
+
+def test_constraint4_inert_when_s_zero():
+    """s = 0 → constraint (4) is inert; the high-value pair (0,0) is admissible
+    and the IT-favouring solvers assign it (no regression vs pre-(4))."""
+    task = _admis_task(0.0)
+    prob = np.array(ProbabilisticAssignmentSolver(100).solve(task)[0])
+    ant = np.array(AntColonyAssignmentSolver(num_ants=10, kmax=30).solve(task)[0])
+    assert prob[0, 0] == 1
+    assert ant[0, 0] == 1
 
 
 # ---------------------------------------------------------------------------

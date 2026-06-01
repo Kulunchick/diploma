@@ -10,7 +10,6 @@ from assignment_solver import (
     CombinedSolver,
     CombinedTask as RustCombinedTask,
     ProbabilisticAssignmentSolver,
-    Task as RustTask,
 )
 from redis.asyncio import Redis
 from sqlalchemy import text
@@ -45,13 +44,30 @@ async def run_algorithm_activity(input: RunAlgorithmInput) -> RunResult:
 async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
     loop = asyncio.get_running_loop()
 
-    rust_task = RustTask(
-        input.m,
-        input.n,
+    # All three algorithms now share CombinedTask so constraint (4) (relative
+    # value s_ij) is enforced uniformly. probabilistic/ant-colony evaluate (4) at
+    # the planning discount (omega). p_ij/s_ij default to zeros when absent →
+    # s = 0 → every pair admissible (identical to the pre-(4) behaviour).
+    m, n = input.m, input.n
+    p_ij = (
+        np.array(input.p_ij, dtype=np.int64)
+        if input.p_ij is not None
+        else np.zeros((m, n), dtype=np.int64)
+    )
+    s_ij = (
+        np.array(input.s_ij, dtype=np.float64)
+        if input.s_ij is not None
+        else np.zeros((m, n), dtype=np.float64)
+    )
+    rust_task = RustCombinedTask(
+        m,
+        n,
         np.array(input.c, dtype=np.int64),
         np.array(input.b_ij, dtype=np.int64),
-        int(input.b_total),
+        p_ij,
         np.array(input.omega, dtype=np.float64),
+        s_ij,
+        int(input.b_total),
     )
 
     if input.algorithm == "ant_colony":

@@ -38,6 +38,8 @@ class SingleAlgorithmWorkflow:
             else None,
             variant_key="formation",
             redis_channel=input.redis_channel,
+            p_ij=input.p_ij,
+            s_ij=input.s_ij,
         )
 
         result: RunResult = await workflow.execute_activity(

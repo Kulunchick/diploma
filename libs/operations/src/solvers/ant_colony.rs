@@ -29,8 +29,8 @@ use numpy::{PyArray, Ix2, ToPyArray};
 use pyo3::{prelude::*, types::PyDict};
 use rayon::prelude::*;
 
-use crate::common::{construct_solution, heuristic, objective};
-use crate::task::Task;
+use crate::combined_task::CombinedTask;
+use crate::common::{construct_solution_with, heuristic, objective};
 
 #[pyclass]
 pub struct AntColonyAssignmentSolver {
@@ -95,10 +95,15 @@ impl AntColonyAssignmentSolver {
     pub fn solve<'py>(
         &self,
         py: Python<'py>,
-        task: &'py Task,
+        task: &'py CombinedTask,
     ) -> PyResult<(Bound<'py, PyArray<i64, Ix2>>, f64)> {
         // θ_ij — цінність одиниці ресурсу для пари «сервіс S_i — провайдер P_j».
-        let heuristic_value = heuristic(&task.c, &task.b_ij, &task.omega);
+        // r = планова знижка (omega_max).
+        let heuristic_value = heuristic(&task.c, &task.b_ij, &task.omega_max);
+        // Обмеження (4): недопустимі пари виключаються з вибору кожною мурашкою.
+        // При s = 0 допустимі всі — поведінка як до введення (4). Феромон
+        // підсилюється лише на парах, що увійшли в розв'язок (тобто допустимих).
+        let admissible = |i: usize, j: usize| task.admissible(i, j, task.omega_max[[i, j]]);
 
         // Q — коефіцієнт підсилення феромонів: T · d_max / β̄, де
         //   T     — загальний ресурс IT-компанії,
@@ -128,8 +133,8 @@ impl AntColonyAssignmentSolver {
             let ant_solutions: Vec<(Array2<i64>, f64)> = (0..self.num_ants)
                 .into_par_iter()
                 .map(|_| {
-                    let x = construct_solution(&task.b_ij, task.b_total, &score);
-                    let f = objective(&x, &task.c, &task.omega);
+                    let x = construct_solution_with(&task.b_ij, task.b_total, &score, admissible);
+                    let f = objective(&x, &task.c, &task.omega_max);
                     (x, f)
                 })
                 .collect();
