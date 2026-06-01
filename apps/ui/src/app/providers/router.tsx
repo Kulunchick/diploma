@@ -2,20 +2,19 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'sonner';
 
 import { ROUTES } from '@shared/config/routes';
+import Navbar from '@widgets/navbar';
 import RequireAuth from '@app/providers/require-auth';
 import RedirectIfAuthenticated from '@app/providers/redirect-if-authenticated';
 
-// Screens — still at old paths; will be moved to pages/ in step 9.
-import Navbar from '@/widgets/navbar';
-import Login from '@/screens/Login';
-import Register from '@/screens/Register';
-import Services from '@/screens/Services';
-import ServiceGroups from '@/screens/ServiceGroups';
-import Providers from '@/screens/Providers';
-import Planning from '@/screens/Planning';
-import Formations from '@/screens/Formations';
-import FormationDetail from '@/screens/FormationDetail';
-import FormationsCompare from '@/screens/FormationsCompare';
+import LoginPage from '@pages/login/ui/LoginPage';
+import RegisterPage from '@pages/register/ui/RegisterPage';
+import ServicesPage from '@pages/services/ui/ServicesPage';
+import ServiceGroupsPage from '@pages/service-groups/ui/ServiceGroupsPage';
+import ProvidersPage from '@pages/providers/ui/ProvidersPage';
+import PlanningPage from '@pages/planning/ui/PlanningPage';
+import FormationsPage from '@pages/formations-list/ui/FormationsPage';
+import FormationDetailPage from '@pages/formation-detail/ui/FormationDetailPage';
+import FormationsComparePage from '@pages/formations-compare/ui/FormationsComparePage';
 
 function protect(element: React.ReactNode) {
   return <RequireAuth>{element}</RequireAuth>;
@@ -38,16 +37,16 @@ export function AppRouter() {
         <Routes>
           <Route path="/" element={<Navigate to={ROUTES.formations} replace />} />
 
-          <Route path={ROUTES.login} element={authPage(<Login />)} />
-          <Route path={ROUTES.register} element={authPage(<Register />)} />
+          <Route path={ROUTES.login} element={authPage(<LoginPage />)} />
+          <Route path={ROUTES.register} element={authPage(<RegisterPage />)} />
 
-          <Route path={ROUTES.services} element={protect(<Services />)} />
-          <Route path={ROUTES.serviceGroups} element={protect(<ServiceGroups />)} />
-          <Route path={ROUTES.providers} element={protect(<Providers />)} />
-          <Route path={ROUTES.planning} element={protect(<Planning />)} />
-          <Route path={ROUTES.formations} element={protect(<Formations />)} />
-          <Route path={ROUTES.formationsCompare} element={protect(<FormationsCompare />)} />
-          <Route path="/formations/:id" element={protect(<FormationDetail />)} />
+          <Route path={ROUTES.services} element={protect(<ServicesPage />)} />
+          <Route path={ROUTES.serviceGroups} element={protect(<ServiceGroupsPage />)} />
+          <Route path={ROUTES.providers} element={protect(<ProvidersPage />)} />
+          <Route path={ROUTES.planning} element={protect(<PlanningPage />)} />
+          <Route path={ROUTES.formations} element={protect(<FormationsPage />)} />
+          <Route path={ROUTES.formationsCompare} element={protect(<FormationsComparePage />)} />
+          <Route path="/formations/:id" element={protect(<FormationDetailPage />)} />
         </Routes>
       </div>
       <Toaster richColors position="top-right" />
