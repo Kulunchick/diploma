@@ -67,6 +67,12 @@ export default function FormationDetail() {
   const d: FormationDetailType = data;
   const isCombined = d.algorithm === 'combined';
 
+  // Cards 3 (F_IT + F_prov) and 5 (F_IT + provider profit) are derived; any
+  // null input → null → "—" (un-backfilled scenarios).
+  const sumOrNull = (a: number | null, b: number | null) =>
+    a != null && b != null ? a + b : null;
+  const fmtOrDash = (n: number | null) => (n != null ? fmt(n) : '—');
+
   const handleExport = async (kind: 'json' | 'csv') => {
     try {
       if (kind === 'json') await exportJson(id);
@@ -99,14 +105,14 @@ export default function FormationDetail() {
         <CardContent className="flex flex-col gap-4">
           {d.error && <p className="text-destructive text-sm">{d.error}</p>}
 
-          {/* Four uniform value cards for every algorithm: F_IT, F_prov
-              (gross), provider profit (net), and the discount-invariant
-              created value (F_IT + provider profit). */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Stat label="Дохід IT-компанії (F_IT)" value={d.value != null ? fmt(d.value) : '—'} />
-            <Stat label="Дохід провайдерів (F_prov)" value={d.provider_value != null ? fmt(d.provider_value) : '—'} />
-            <Stat label="Прибуток провайдерів" value={d.provider_profit != null ? fmt(d.provider_profit) : '—'} />
-            <Stat label="Створена цінність (F_IT + прибуток пров.)" value={d.created_value != null ? fmt(d.created_value) : '—'} />
+          {/* Five uniform value cards for every algorithm. Cards wrap rather
+              than shrink on narrow viewports. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+            <Stat label="Дохід IT-компанії (F_IT)" value={fmtOrDash(d.value)} />
+            <Stat label="Дохід провайдерів (F_prov)" value={fmtOrDash(d.provider_value)} />
+            <Stat label="Сумарна вигода (F_IT + F_prov)" value={fmtOrDash(sumOrNull(d.value, d.provider_value))} />
+            <Stat label="Прибуток провайдерів" value={fmtOrDash(d.provider_profit)} />
+            <Stat label="Створена цінність (F_IT + прибуток пров.)" value={fmtOrDash(sumOrNull(d.value, d.provider_profit))} />
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Stat label="Викор. ресурс" value={totalsMemo ? fmt(totalsMemo.total_resource_used) : '—'} />
@@ -173,6 +179,8 @@ export default function FormationDetail() {
                   <TableHead>Ціна</TableHead>
                   <TableHead>Знижка</TableHead>
                   <TableHead>Дохід</TableHead>
+                  <TableHead>Дохід пров.</TableHead>
+                  <TableHead>Прибуток пров.</TableHead>
                   <TableHead>Ресурс</TableHead>
                 </TableRow>
               </TableHeader>
@@ -206,6 +214,8 @@ export default function FormationDetail() {
                         )}
                       </TableCell>
                       <TableCell>{fmt(a.effective_revenue)}</TableCell>
+                      <TableCell>{fmtOrDash(a.provider_revenue_pair)}</TableCell>
+                      <TableCell>{fmtOrDash(a.provider_profit_pair)}</TableCell>
                       <TableCell>{fmt(a.resource_used)}</TableCell>
                     </TableRow>
                   );

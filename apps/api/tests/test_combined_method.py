@@ -234,6 +234,12 @@ async def test_combined_persist_and_read(client, auth_headers, mock_temporal):
     seff = sum(a["effective_revenue"] for a in d["assignments"])
     assert seff == pytest.approx(d["value"], abs=1e-6)
 
+    # Per-pair provider columns sum to the scenario-level provider totals.
+    pr_sum = sum(a["provider_revenue_pair"] for a in d["assignments"])
+    pp_sum = sum(a["provider_profit_pair"] for a in d["assignments"])
+    assert pr_sum == pytest.approx(d["provider_value"], abs=1e-6)
+    assert pp_sum == pytest.approx(d["provider_profit"], abs=1e-6)
+
     # group all-or-nothing per provider
     group_ids = {svc["A-Хостинг"], svc["B-DNS"]}
     per_provider: dict[str, set] = {}

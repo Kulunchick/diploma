@@ -151,6 +151,12 @@ async def test_metrics_populated_for_single_algorithms(
     # API identity: created_value == F_IT + provider_profit
     assert d["created_value"] == pytest.approx(d["value"] + d["provider_profit"], abs=1e-6)
 
+    # Per-pair columns must sum to the scenario-level totals shown in the cards.
+    pr_sum = sum(a["provider_revenue_pair"] for a in d["assignments"])
+    pp_sum = sum(a["provider_profit_pair"] for a in d["assignments"])
+    assert pr_sum == pytest.approx(d["provider_value"], abs=1e-6)
+    assert pp_sum == pytest.approx(d["provider_profit"], abs=1e-6)
+
 
 async def test_backfill_repopulates_from_snapshot(client, auth_headers, mock_temporal):
     """Simulate a pre-migration scenario by NULLing the provider columns, then

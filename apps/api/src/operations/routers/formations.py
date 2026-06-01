@@ -296,6 +296,14 @@ async def _build_detail(
                 return float(old_b_ij[i][j])
         return 0.0
 
+    def provider_revenue_for(service_id: str, j: int | None) -> float | None:
+        """Raw p_ij for the pair, from the snapshot. None when unavailable
+        (legacy snapshot without per-service provider_revenue)."""
+        if j is None or service_cells is None:
+            return None
+        pr = service_cells.get(service_id, {}).get("provider_revenue", [])
+        return float(pr[j]) if j < len(pr) else None
+
     rows: list[FormationAssignmentRead] = []
     total_revenue = 0.0
     total_resource = 0.0
@@ -305,18 +313,29 @@ async def _build_detail(
         eff = float(a.effective_revenue or 0)
         total_revenue += eff
         total_resource += resource_used
+
+        # Per-pair provider metrics, matching compute_provider_metrics term for
+        # term: r is the applied discount (final for combined, planning else).
+        price = float(a.price or 0)
+        r = float(a.final_discount) if a.final_discount is not None else float(a.discount or 0)
+        p_ij = provider_revenue_for(str(a.service_id), j)
+        provider_revenue_pair = (1.0 - r) * p_ij if p_ij is not None else None
+        provider_profit_pair = p_ij - (1.0 - r) * price if p_ij is not None else None
+
         rows.append(
             FormationAssignmentRead(
                 service_id=a.service_id,
                 service_name=service_names.get(a.service_id, str(a.service_id)),
                 provider_id=a.provider_id,
                 provider_name=provider_names.get(a.provider_id, str(a.provider_id)),
-                price=float(a.price or 0),
+                price=price,
                 discount=float(a.discount or 0),
                 effective_revenue=eff,
                 resource_used=resource_used,
                 group_name=group_name_by_service.get(str(a.service_id)),
                 final_discount=float(a.final_discount) if a.final_discount is not None else None,
+                provider_revenue_pair=provider_revenue_pair,
+                provider_profit_pair=provider_profit_pair,
             )
         )
 
