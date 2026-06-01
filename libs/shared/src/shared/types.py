@@ -42,6 +42,68 @@ class SolveResult(BaseModel):
     probabilistic: AlgorithmResult
 
 
+class SingleSolveInput(BaseModel):
+    """Input for SingleAlgorithmWorkflow — runs exactly one algorithm and
+    persists the result back to Postgres for a formation scenario.
+
+    Mirrors SolveInput but selects a single algorithm and carries the
+    scenario_id so the worker can write assignments/value back to the DB.
+    """
+    m: int
+    n: int
+    c: list[list[int]]
+    b_ij: list[list[int]]
+    b_total: int
+    omega: list[list[float]]  # planning discount r_ij
+    algorithm: str  # "ant_colony" | "probabilistic"
+    ant_colony: AntColonyParams = AntColonyParams()
+    probabilistic: ProbabilisticParams = ProbabilisticParams()
+    # Constraint (4): provider revenue p_ij and relative-value thresholds s_ij.
+    # Enforced for these two algorithms too (admissibility at the planning r).
+    p_ij: list[list[int]] | None = None
+    s_ij: list[list[float]] | None = None
+    scenario_id: str
+    redis_channel: str | None = None
+
+
+class CombinedParams(BaseModel):
+    """Solver parameters for the combined method (article §4–5)."""
+    kmax_subproblem: int = 100
+    discount_step: float = 0.05
+    local_search_restarts: int = 0
+
+
+class CombinedSolveInput(BaseModel):
+    """Input for CombinedFormationWorkflow — runs the combined method on the
+    aggregated (unit × provider) matrices and persists F_IT, F_prov, the
+    negotiated discounts and the expanded assignments for a scenario.
+
+    omega_max is the per-pair upper discount bound (planning r, or all-0.95 when
+    ignore_discounts was chosen on the API side); s_ij are constraint-(4)
+    thresholds. p_ij is provider revenue.
+    """
+    m: int
+    n: int
+    c: list[list[int]]
+    b_ij: list[list[int]]
+    p_ij: list[list[int]]
+    omega_max: list[list[float]]
+    s_ij: list[list[float]]
+    b_total: int
+    params: CombinedParams = CombinedParams()
+    scenario_id: str
+    redis_channel: str | None = None
+
+
+class CombinedResult(BaseModel):
+    """Result of the combined method, returned by run_combined_method_activity."""
+    v_final: list[list[int]]
+    r_final: list[list[float]]
+    f_it: float
+    f_prov: float
+    source: str  # "subtask_a_improved" | "subtask_b_improved"
+
+
 class ExperimentInput(BaseModel):
     experiment_type: str
     params: dict

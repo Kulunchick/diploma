@@ -58,10 +58,38 @@ ingress:
 # deploy/charts/backend/values.yaml
 config:
   corsOrigins: "https://example.com"
+  databaseUrl: "postgresql+asyncpg://diploma:PASS@appdb-postgresql.db.svc:5432/diploma"
+jwtSecret: "<from a sealed secret — see below>"
+
+# deploy/charts/worker/values.yaml
+config:
+  databaseUrl: "postgresql+asyncpg://diploma:PASS@appdb-postgresql.db.svc:5432/diploma"
 ```
 
 Helm will refuse to render templates if these remain empty (`required` guards
 are in place on each field).
+
+### Application database (Postgres)
+
+The information system (accounts, catalogues, planning data, formation results)
+needs its **own** PostgreSQL instance — kept separate from Temporal's database
+so the two have independent lifecycles, backups and migrations. Provision one
+(e.g. the Bitnami `postgresql` chart) with a `diploma` database and role, then
+point both the backend and worker `config.databaseUrl` at it.
+
+The API applies Alembic migrations automatically on startup (`alembic upgrade
+head`); no manual migration step is required in the cluster.
+
+Required keys:
+
+| Key | Chart | Notes |
+|---|---|---|
+| `postgres.host` (in your `databaseUrl`) | backend, worker | service DNS of the app Postgres |
+| `postgres.password` (in your `databaseUrl`) | backend, worker | **store as a sealed secret**, do not commit the real value |
+| `jwtSecret` | backend | HS256 signing secret — **store as a sealed secret**; rendered into the backend `Secret` and injected as `JWT_SECRET` |
+
+In `docker-compose.dev.yml` this is the `appdb` service (`postgres:16`,
+db/user/pass `diploma`) with `DATABASE_URL` + `JWT_SECRET` wired into api/worker.
 
 ---
 

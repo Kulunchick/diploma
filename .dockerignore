@@ -1,0 +1,36 @@
+# Build context = repo root for the api and worker images. Keep host-only
+# build artifacts out so COPY doesn't drag them in (a host .venv breaks
+# `uv venv` in the image; libs/operations/target is a large wrong-platform
+# Rust build; __pycache__ poisons the image with stale bytecode).
+
+# Python
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Rust
+**/target
+
+# Node / frontend
+**/node_modules
+**/dist
+**/.vite
+
+# VCS / IDE / OS
+.git
+.gitignore
+**/.idea
+**/.vscode
+**/.DS_Store
+**/Thumbs.db
+
+# Tooling / local
+.playwright-mcp
+.claude
+**/*.log
+docs

@@ -12,6 +12,9 @@ config:
   temporalNamespace: "default"
   taskQueue: "operations"
   redisUrl: "redis://redis-master.redis.svc.cluster.local:6379"
+  # Async SQLAlchemy URL — used by persist_formation_result_activity to write
+  # formation results back. Required: same database as the backend.
+  databaseUrl: ""
 
 resources:
   requests:

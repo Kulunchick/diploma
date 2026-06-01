@@ -2,6 +2,30 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Information-system screens
+
+Alongside the original matrix solver (`/`) and experiment pages, the app
+includes an authenticated information system. Server state is managed with
+`@tanstack/react-query`; forms use `react-hook-form` + `zod`; toasts use `sonner`.
+
+| Route | Screen | Description |
+|---|---|---|
+| `/login`, `/register` | Login / Register | JWT auth; token stored in `localStorage` |
+| `/services` | Services | service catalogue CRUD; shows group memberships |
+| `/service-groups` | ServiceGroups | interdependency groups; checkbox multi-select of members |
+| `/providers` | Providers | provider directory CRUD |
+| `/planning` | Planning | four tabbed matrices (prices, resources, provider revenue, discounts); cell edits autosave (debounced) with a per-cell indicator |
+| `/formations` | Formations | list of scenarios; "Нове формування" dialog (name, algorithm, params, T); polls while running |
+| `/formations/:id` | FormationDetail | totals + assignments grouped by provider; JSON/CSV export; "compare" launcher |
+| `/formations/compare?ids=…` | FormationsCompare | side-by-side totals table + recharts bar chart |
+
+Auth lives in `src/auth/` (`AuthContext`, `RequireAuth`); the typed API client
+and per-resource modules live in `src/api/`. Routes under the information system
+are wrapped in `<RequireAuth>`; `/` and the experiment routes stay public.
+
+---
+
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh

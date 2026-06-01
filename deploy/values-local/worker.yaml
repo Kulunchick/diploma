@@ -7,3 +7,4 @@ replicaCount: 1
 config:
   temporalHost: "diploma-temporal-frontend.temporal.svc.cluster.local:7233"
   redisUrl: "redis://redis-master.default.svc.cluster.local:6379"
+  databaseUrl: "postgresql+asyncpg://diploma:diploma@appdb-postgresql.default.svc.cluster.local:5432/diploma"
