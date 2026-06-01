@@ -28,6 +28,9 @@ apps/ui/dist/
 .idea/
 .vscode/
 
+# Deployment notes (local only)
+DEPLOY.md
+
 # OS
 .DS_Store
 Thumbs.db
