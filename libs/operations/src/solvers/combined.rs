@@ -134,11 +134,32 @@ impl CombinedSolver {
         ticks.extend(ticks_b);
 
         // --- Стадія 4: обрати кандидата з більшою сумарною вигодою ---
-        if combined(&improved_a) >= combined(&improved_b) {
-            (improved_a, "subtask_a_improved", ticks)
+        let (best, source) = if combined(&improved_a) >= combined(&improved_b) {
+            (improved_a, "subtask_a_improved")
         } else {
-            (improved_b, "subtask_b_improved", ticks)
+            (improved_b, "subtask_b_improved")
+        };
+
+        // Графік збіжності: best-so-far. `ticks` досі містить «сирі» значення
+        // сумарної вигоди з 5 НЕЗАЛЕЖНИХ прогонів (стартів А/Б + збурених
+        // рестартів), конкатеновані в один вектор. Як єдина монотонна крива вони
+        // дають фізично неможливі падіння (кожен рестарт стартує з гіршої точки).
+        // Перетворюємо на накопичувальний максимум: крива не спадає і завершується
+        // рівно на сумарній вигоді переможця. Counter ітерацій у solve() — єдиний
+        // наскрізний (i+1), тож вісь X суцільна.
+        let mut running = f64::NEG_INFINITY;
+        for t in ticks.iter_mut() {
+            running = running.max(*t);
+            *t = running;
         }
+        // Запобіжник: остання точка точно дорівнює збереженій сумарній вигоді.
+        let final_benefit = combined(&best);
+        match ticks.last_mut() {
+            Some(last) => *last = final_benefit,
+            None => ticks.push(final_benefit),
+        }
+
+        (best, source, ticks)
     }
 }
 

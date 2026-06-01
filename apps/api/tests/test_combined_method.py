@@ -74,6 +74,25 @@ def test_return_contract_consistent():
     assert out["source"] in ("subtask_a_improved", "subtask_b_improved")
 
 
+def test_convergence_ticks_are_monotonic_best_so_far():
+    """The iteration callback must emit a best-so-far series: with restarts > 0 the
+    solver runs several independent local searches, but the chart is one timeline,
+    so it must be non-decreasing and end exactly at the stored combined benefit
+    (no impossible mid-run drops, no per-run counter gaps). Regression for the
+    telemetry bug where raw per-run values were concatenated."""
+    ticks: list[float] = []
+    solver = CombinedSolver(400, 0.05, 3)
+    solver.set_iteration_callback(lambda d: ticks.append(d["current_best_value"]))
+    out = solver.solve(_task())
+    benefit = out["f_it"] + out["f_prov"]
+
+    assert ticks, "expected at least one convergence tick"
+    assert all(ticks[i] <= ticks[i + 1] + 1e-9 for i in range(len(ticks) - 1)), \
+        "best-so-far series must be monotonically non-decreasing"
+    assert ticks[-1] == pytest.approx(benefit, abs=1e-6)
+    assert max(ticks) == pytest.approx(benefit, abs=1e-6)
+
+
 def test_invariants_1_2_3():
     out, v, r = _solve()
     # (1) and (2): no objective exceeds its discount-free Σ ceiling.
