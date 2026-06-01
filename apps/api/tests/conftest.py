@@ -104,3 +104,47 @@ def auth_headers(client):
         return {"Authorization": f"Bearer {token}"}
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Mocked Temporal: capture start_workflow calls instead of running a workflow,
+# so formation tests can invoke the persist activities directly. Shared by
+# test_formation_flow.py and test_combined_method.py.
+# ---------------------------------------------------------------------------
+
+class _MockDesc:
+    from temporalio.client import WorkflowExecutionStatus as _S
+    status = _S.RUNNING
+
+
+class _MockHandle:
+    async def describe(self):
+        return _MockDesc()
+
+
+class _MockTemporal:
+    def __init__(self):
+        self.calls = []
+
+    async def start_workflow(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+
+    def get_workflow_handle(self, workflow_id):
+        return _MockHandle()
+
+
+class _ApiFakeRedis:
+    """Minimal stand-in for app.state.redis (the /iterations dependency)."""
+
+    async def xrange(self, key, min="-", max="+"):
+        return []
+
+
+@pytest.fixture
+def mock_temporal():
+    from src.operations.main import app
+
+    mock = _MockTemporal()
+    app.state.temporal = mock
+    app.state.redis = _ApiFakeRedis()
+    return mock

@@ -7,51 +7,12 @@ assignments + snapshot are written and totals reconcile with the solver value.
 import sys
 from pathlib import Path
 
-import pytest
-from temporalio.client import WorkflowExecutionStatus
-
 # The worker package is a sibling app; add its src so the persist activity
 # (which shares deps with the api) can be imported and called directly.
+# mock_temporal is provided by conftest.py.
 _WORKER_SRC = Path(__file__).resolve().parents[3] / "apps" / "worker" / "src"
 if str(_WORKER_SRC) not in sys.path:
     sys.path.insert(0, str(_WORKER_SRC))
-
-
-class _MockDesc:
-    status = WorkflowExecutionStatus.RUNNING
-
-
-class _MockHandle:
-    async def describe(self):
-        return _MockDesc()
-
-
-class _MockTemporal:
-    def __init__(self):
-        self.calls = []
-
-    async def start_workflow(self, *args, **kwargs):
-        self.calls.append((args, kwargs))
-
-    def get_workflow_handle(self, workflow_id):
-        return _MockHandle()
-
-
-class _ApiFakeRedis:
-    """Minimal stand-in for the API's app.state.redis (the /iterations dep)."""
-
-    async def xrange(self, key, min="-", max="+"):
-        return []
-
-
-@pytest.fixture
-def mock_temporal():
-    from src.operations.main import app
-
-    mock = _MockTemporal()
-    app.state.temporal = mock
-    app.state.redis = _ApiFakeRedis()
-    return mock
 
 
 async def _seed(client, h):

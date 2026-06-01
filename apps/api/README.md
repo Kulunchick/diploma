@@ -2,13 +2,11 @@
 
 FastAPI + Temporal + Rust solvers (assignment_solver).
 
-The service has two parts:
-
-1. **Legacy solver flow** — `POST /api/solve`, `POST /api/experiment1..4`,
-   WS `/api/jobs/{id}/events`. Unauthenticated, matrix-in / stream-out. Unchanged.
-2. **Information system** — authenticated `/api/*` endpoints backed by Postgres:
-   user accounts, service & provider catalogues, planning data, and saved
-   package-formation scenarios. Every user owns their own data.
+**Information system** — authenticated `/api/*` endpoints backed by Postgres:
+user accounts, service & provider catalogues, planning data, and saved
+package-formation scenarios. Every user owns their own data. Three formation
+algorithms: probabilistic-greedy, ant-colony, and the **combined method**
+(article §4–5; see [`docs/combined-method.md`](../../docs/combined-method.md)).
 
 ## Environment variables
 
@@ -42,7 +40,7 @@ All `/api/*` endpoints below require `Authorization: Bearer <token>`.
 | GET/POST/PUT/DELETE | `/api/services[/{id}]` | service catalogue |
 | GET/POST/PUT/DELETE | `/api/service-groups[/{id}]` | interdependency groups (stored only) |
 | GET/POST/PUT/DELETE | `/api/providers[/{id}]` | provider directory |
-| GET / PUT `/cell` / POST `/bulk` | `/api/planning` | planning cells (price, resource, provider revenue, discount) |
+| GET / PUT `/cell` / POST `/bulk` | `/api/planning` | planning cells (price, resource, provider revenue, discount, **min_value=s_ij**) |
 | POST / GET / DELETE | `/api/formations[/{id}]` | run + inspect + delete scenarios |
 | GET | `/api/formations/{id}/export.{json,csv}` | download results |
 | POST | `/api/formations/compare` | compare scenarios |
@@ -70,6 +68,46 @@ curl -X POST localhost:8000/api/formations -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name":"Scenario 1","b_total":16000,"algorithm":"probabilistic","params":{"Kmax":100}}'
 ```
+
+## Combined method (`algorithm: "combined"`)
+
+The third algorithm implements the article's combined method (§4–5): it
+integrates the IT-company subtask (revenue `F_IT`) and the provider subtask
+(revenue `F_prov`) and returns a mutually beneficial package — best by combined
+benefit `F_IT + F_prov`, not optimal for either side alone. Full write-up:
+[`docs/combined-method.md`](../../docs/combined-method.md).
+
+`CombinedParameters` (the `params` object when `algorithm="combined"`):
+
+| field | default | bounds | meaning |
+|---|---|---|---|
+| `kmax_subproblem` | 100 | ≥ 1 | random constructions per subtask A/B |
+| `discount_step` | 0.05 | 0 < step ≤ 0.5 | discount move size in the stage-3 search |
+| `ignore_discounts` | false | — | drop the planning discount ceiling (use `omega_max = 0.95`) |
+| `local_search_restarts` | 0 | ≥ 0 | extra perturbed stage-3 restarts |
+
+**New planning field `min_value` (s_ij)** — the provider's minimum relative
+value, used only by constraint (4): `s_ij · (1 − r_ij) · d_ij ≤ p_ij` (provider
+revenue ≥ s_ij × discounted price paid). `s_ij = 0` disables it, so the other two
+algorithms are unaffected.
+
+**Combined-only response fields** on `GET /api/formations/{id}`: `provider_value`
+(=F_prov), `combined_source` (`subtask_a_improved`|`subtask_b_improved`),
+`combined_benefit` (=value + provider_value), and per-assignment `final_discount`
+(the negotiated discount, may differ from the planning r_max). For the other two
+algorithms these are `null` / equal to the static discount. CSV export gains a
+`final_discount` column.
+
+```bash
+curl -X POST localhost:8000/api/formations -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Combined","b_total":16000,"algorithm":"combined",
+       "params":{"kmax_subproblem":300,"discount_step":0.05,
+                 "ignore_discounts":false,"local_search_restarts":3}}'
+```
+
+`apps/api/scripts/seed_test_user.py` seeds a full anti-correlated instance and
+runs all three algorithms — the canonical A-vs-B-vs-combined demonstration.
 
 ## Tests
 
