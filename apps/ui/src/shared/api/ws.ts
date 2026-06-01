@@ -2,6 +2,7 @@
 // The low-level WS connection helper will live here once formation-stream
 // is implemented (see features/formation-stream/). Currently unused.
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function createWsConnection(_url: string): never {
   throw new Error('WS not implemented yet');
 }

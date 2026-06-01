@@ -33,7 +33,7 @@ export default tseslint.config(
     },
   },
 
-  // ── FSD boundary rules ──────────────────────────────────────────────────────
+  // ── FSD boundary rules (eslint-plugin-boundaries v6) ───────────────────────
   {
     files: ['src/**/*.{ts,tsx}'],
     plugins: {
@@ -41,25 +41,22 @@ export default tseslint.config(
       import: importPlugin,
     },
     settings: {
-      'boundaries/elements': [
-        { type: 'shared',   pattern: 'src/shared/**/*' },
-        { type: 'entities', pattern: 'src/entities/**/*' },
-        { type: 'features', pattern: 'src/features/**/*' },
-        { type: 'widgets',  pattern: 'src/widgets/**/*' },
-        { type: 'pages',    pattern: 'src/pages/**/*' },
-        { type: 'app',      pattern: 'src/app/**/*' },
-      ],
+      // v6 expects pattern arrays
+      'boundaries/elements': FSD_LAYERS.map((layer) => ({
+        type: layer,
+        pattern: `src/${layer}/**/*`,
+      })),
       'boundaries/ignore': ['**/*.test.*', '**/*.spec.*'],
     },
     rules: {
       // Each layer may only import from strictly-lower layers.
-      'boundaries/element-types': [
+      'boundaries/dependencies': [
         'error',
         {
           default: 'disallow',
           rules: FSD_LAYERS.map((layer, i) => ({
             from: layer,
-            allow: FSD_LAYERS.slice(0, i), // everything below
+            allow: FSD_LAYERS.slice(0, i),
           })),
         },
       ],
