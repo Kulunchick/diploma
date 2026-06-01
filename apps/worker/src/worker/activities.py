@@ -481,12 +481,15 @@ async def persist_combined_result_activity(input: PersistCombinedInput) -> None:
             logging.getLogger(__name__).warning(
                 "Combined %s: failed to read iteration history: %s", input.scenario_id, exc
             )
-        # The solver emits a best-so-far series whose final tick equals the
-        # combined benefit, but the iteration callback fires xadd fire-and-forget
-        # from the solver thread, so the last tick(s) may not flush before the
-        # solver returns and we persist. Append a guaranteed terminal point equal
-        # to the canonical F_IT + F_prov so the chart always ends exactly at the
-        # value shown on the result cards (and the series stays best-so-far).
+        # The solver now emits a clean best-so-far series on a single contiguous
+        # tick counter (running max over all passes/stages) — no stitching or
+        # running-max needed here. The only residual concern is the flush race:
+        # the iteration callback fires xadd fire-and-forget from the solver
+        # thread, so the final tick(s) may not land before the solver returns and
+        # we drain. Append a guaranteed terminal point equal to the canonical
+        # F_IT + F_prov so the chart always ends exactly at the value shown on the
+        # result cards. Because the series is already best-so-far, this only ever
+        # tops up a missing tail — it never reorders or smooths.
         combined_benefit = input.f_it + input.f_prov
         if history:
             running = history[-1][1]
@@ -494,6 +497,16 @@ async def persist_combined_result_activity(input: PersistCombinedInput) -> None:
                 history.append((history[-1][0] + 1, combined_benefit))
         else:
             history = [(1, combined_benefit)]
+
+        # Warn-only regression guard: the chart's final point must equal the
+        # combined benefit on the totals cards. Catches any re-introduction of the
+        # stitching bug (where the series' max/final ≠ stored benefit).
+        if abs(history[-1][1] - combined_benefit) > 1e-6:
+            logging.getLogger(__name__).warning(
+                "Combined %s: final iteration best_value (%.6f) ≠ combined benefit (%.6f)",
+                input.scenario_id, history[-1][1], combined_benefit,
+            )
+
         for iteration, best_value in history:
             await session.execute(
                 text(
