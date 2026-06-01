@@ -429,6 +429,19 @@ async def persist_combined_result_activity(input: PersistCombinedInput) -> None:
             logging.getLogger(__name__).warning(
                 "Combined %s: failed to read iteration history: %s", input.scenario_id, exc
             )
+        # The solver emits a best-so-far series whose final tick equals the
+        # combined benefit, but the iteration callback fires xadd fire-and-forget
+        # from the solver thread, so the last tick(s) may not flush before the
+        # solver returns and we persist. Append a guaranteed terminal point equal
+        # to the canonical F_IT + F_prov so the chart always ends exactly at the
+        # value shown on the result cards (and the series stays best-so-far).
+        combined_benefit = input.f_it + input.f_prov
+        if history:
+            running = history[-1][1]
+            if combined_benefit > running:
+                history.append((history[-1][0] + 1, combined_benefit))
+        else:
+            history = [(1, combined_benefit)]
         for iteration, best_value in history:
             await session.execute(
                 text(
