@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
-import { useAuth } from '@/auth/AuthContext';
+import { useAuthStore } from '@shared/zustand/useAuthStore';
+import * as authApi from '@/api/auth';
 
 const schema = z.object({
   email: z.string().email('Невірний формат email'),
@@ -19,7 +20,6 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function Register() {
-  const { register: registerUser } = useAuth();
   const navigate = useNavigate();
 
   const {
@@ -30,7 +30,9 @@ export default function Register() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await registerUser(values.email, values.password, values.full_name || undefined);
+      const res = await authApi.register(values.email, values.password, values.full_name || undefined);
+      useAuthStore.getState().setToken(res.access_token);
+      useAuthStore.getState().setUser(res.user);
       toast.success('Акаунт створено');
       navigate('/services', { replace: true });
     } catch (err) {

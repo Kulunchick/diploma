@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
-import { useAuth } from '@/auth/AuthContext';
+import { useAuthStore } from '@shared/zustand/useAuthStore';
+import * as authApi from '@/api/auth';
 
 const schema = z.object({
   email: z.string().email('Невірний формат email'),
@@ -18,7 +19,6 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function Login() {
-  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/services';
@@ -31,7 +31,10 @@ export default function Login() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await login(values.email, values.password);
+      const { access_token } = await authApi.login(values.email, values.password);
+      useAuthStore.getState().setToken(access_token);
+      const user = await authApi.getMe();
+      useAuthStore.getState().setUser(user);
       toast.success('Вхід виконано');
       navigate(from, { replace: true });
     } catch (err) {

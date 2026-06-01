@@ -10,24 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.tsx';
-import { useAuth } from '@/auth/AuthContext';
-import { NAV_SECTIONS } from '@/config/routes';
+import { useAuthStore } from '@shared/zustand/useAuthStore';
+import { NAV_SECTIONS } from '@shared/config/routes';
 import { cn } from '@/lib/utils';
 
-/**
- * App-shell navigation: a horizontal row of section tabs (active one
- * highlighted) plus the current user + logout on the right. Thin and
- * presentational — only reads auth state for the user/logout slot. Renders
- * nothing for anonymous visitors, so the login/register pages have no nav.
- */
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const user = useAuthStore((s) => s.user);
+  const clearToken = useAuthStore((s) => s.clearToken);
 
   if (!user) return null;
 
   return (
     <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-8">
-      {/* Tabs wrap on narrow viewports rather than clip — no dropdown. */}
       <div className="flex flex-wrap items-center gap-1">
         {NAV_SECTIONS.map((s) => (
           <NavLink
@@ -58,7 +52,7 @@ export default function Navbar() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{user.full_name || user.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-destructive">
+            <DropdownMenuItem onClick={clearToken} className="text-destructive">
               <LogOut className="h-4 w-4 mr-2" />
               Вийти
             </DropdownMenuItem>
