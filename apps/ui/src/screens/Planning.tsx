@@ -119,10 +119,6 @@ export default function Planning() {
                 </TabsTrigger>
               ))}
             </TabsList>
-            <p className="mt-2 text-sm text-muted-foreground">
-              «Мін. відносна цінність» (s_ij) використовується лише комбінованим методом.
-              Залиште 0, якщо не застосовуєте обмеження відносної цінності.
-            </p>
             {TABS.map((t) => (
               <TabsContent key={t.field} value={t.field}>
                 <PlanningMatrix

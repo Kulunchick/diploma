@@ -2,9 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
-import Navbar from './components/Navbar.tsx'
+import Navbar from './widgets/navbar'
 import { AuthProvider } from './auth/AuthContext.tsx'
 import RequireAuth from './auth/RequireAuth.tsx'
+import RedirectIfAuthenticated from './auth/RedirectIfAuthenticated.tsx'
+import { ROUTES } from './config/routes.ts'
 import Login from './screens/Login.tsx'
 import Register from './screens/Register.tsx'
 import Services from './screens/Services.tsx'
@@ -23,6 +25,10 @@ function protect(element: React.ReactNode) {
   return <RequireAuth>{element}</RequireAuth>
 }
 
+function authPage(element: React.ReactNode) {
+  return <RedirectIfAuthenticated>{element}</RedirectIfAuthenticated>
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -37,19 +43,19 @@ function App() {
 
             <Routes>
               {/* Home → formations (RequireAuth bounces anon users to /login). */}
-              <Route path="/" element={<Navigate to="/formations" replace />} />
+              <Route path="/" element={<Navigate to={ROUTES.formations} replace />} />
 
-              {/* Auth */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              {/* Auth — bounce already-authenticated users to the app home. */}
+              <Route path={ROUTES.login} element={authPage(<Login />)} />
+              <Route path={ROUTES.register} element={authPage(<Register />)} />
 
               {/* Information system — authenticated */}
-              <Route path="/services" element={protect(<Services />)} />
-              <Route path="/service-groups" element={protect(<ServiceGroups />)} />
-              <Route path="/providers" element={protect(<Providers />)} />
-              <Route path="/planning" element={protect(<Planning />)} />
-              <Route path="/formations" element={protect(<Formations />)} />
-              <Route path="/formations/compare" element={protect(<FormationsCompare />)} />
+              <Route path={ROUTES.services} element={protect(<Services />)} />
+              <Route path={ROUTES.serviceGroups} element={protect(<ServiceGroups />)} />
+              <Route path={ROUTES.providers} element={protect(<Providers />)} />
+              <Route path={ROUTES.planning} element={protect(<Planning />)} />
+              <Route path={ROUTES.formations} element={protect(<Formations />)} />
+              <Route path={ROUTES.formationsCompare} element={protect(<FormationsCompare />)} />
               <Route path="/formations/:id" element={protect(<FormationDetail />)} />
             </Routes>
           </div>
