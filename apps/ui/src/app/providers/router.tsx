@@ -29,7 +29,7 @@ export function AppRouter() {
     <Router>
       <div className="p-4">
         <h1 className="text-3xl font-bold text-center mb-8">
-          Формування пакетів сервісів для провайдерів інфокомунікацій
+          Інформаційна система формування пакетів сервісів для провайдерів інфокомунікацій
         </h1>
 
         <Navbar />

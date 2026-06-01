@@ -7,10 +7,6 @@ import { Input } from '@shared/ui/input';
 
 export type CellSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-export function cellKey(serviceId: string, providerId: string): string {
-  return `${serviceId}:${providerId}`;
-}
-
 const FIELD_STEP: Record<PlanningField, { step: number; min: number; max?: number }> = {
   price: { step: 1, min: 0 },
   resource: { step: 1, min: 0 },

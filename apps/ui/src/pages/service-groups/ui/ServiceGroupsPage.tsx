@@ -77,7 +77,7 @@ export default function ServiceGroupsPage() {
           <CardTitle>Групи взаємозалежних сервісів</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Якщо хоча б один сервіс групи включено для провайдера, всі сервіси групи мають
-            бути включені. (Зберігається, але поки не враховується розв'язувачем.)
+            бути включені.
           </p>
         </div>
         <Button onClick={() => { setEditing(null); setOpen(true); }}>Додати групу</Button>

@@ -19,7 +19,7 @@ const TABS: { field: PlanningField; label: string }[] = [
   { field: 'resource', label: 'Ресурси' },
   { field: 'provider_revenue', label: 'Дохід провайдера' },
   { field: 'discount', label: 'Знижки' },
-  { field: 'min_value', label: 'Мін. відносна цінність (s_ij)' },
+  { field: 'min_value', label: 'Мін. відносна цінність' },
 ];
 
 export default function PlanningPage() {

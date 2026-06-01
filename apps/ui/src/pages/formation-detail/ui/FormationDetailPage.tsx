@@ -67,7 +67,6 @@ export default function FormationDetailPage() {
             value={data.value}
             provider_value={data.provider_value}
             provider_profit={data.provider_profit}
-            b_total={data.b_total}
             totals={data.totals}
           />
         </CardContent>

@@ -78,9 +78,10 @@ impl CombinedSolver {
     pub fn solve<'py>(&self, py: Python<'py>, task: &CombinedTask) -> PyResult<Bound<'py, PyDict>> {
         let (best, source, ticks) = self.solve_core(task);
 
-        // current_best_value = F_IT + F_prov (графік збіжності показує сумарну
-        // вигоду). Викликаємо callback послідовно — той самий патерн, що й у
-        // ймовірнісному / АМК розв'язувачах.
+        // ticks — вже best-so-far (накопичувальний максимум сумарної вигоди),
+        // монотонні за побудовою. current_best_value = F_IT + F_prov; iteration —
+        // наскрізний лічильник i+1 (суцільна вісь X). Той самий патерн callback,
+        // що й у ймовірнісному / АМК розв'язувачах, які теж емітять best-so-far.
         if let Some(ref cb) = self.iteration_callback {
             for (i, value) in ticks.iter().enumerate() {
                 let data = PyDict::new(py);
@@ -105,6 +106,16 @@ impl CombinedSolver {
     /// щоб гарячий шлях і юніт-тести не залежали від інтерпретатора. Повертає
     /// (фінальний стан, source, тіки сумарної вигоди для callback).
     fn solve_core(&self, task: &CombinedTask) -> (State, &'static str, Vec<f64>) {
+        // Графік збіжності — best-so-far на ЄДИНОМУ наскрізному лічильнику тіків.
+        // global_best — накопичувальний максимум сумарної вигоди по ВСІХ прогонах
+        // і стадіях (структурні старти А/Б + збурені рестарти). На кожному тіку
+        // емітимо global_best, а не «сире» значення поточного прогону, тож:
+        //   • серія монотонно не спадає ЗА ПОБУДОВОЮ (жодних падінь на рестартах);
+        //   • остання точка дорівнює сумарній вигоді переможця стадії 4 — саме той
+        //     прогін встановив фінальний максимум.
+        // Лічильник тіків у solve() наскрізний (i+1 по всьому вектору) → вісь X
+        // суцільна 1..N без стрибків між прогонами/стадіями.
+        let mut global_best = f64::NEG_INFINITY;
         let mut ticks: Vec<f64> = Vec::new();
 
         // --- Стадія 1: однокритеріальні підзадачі при r = r_max ---
@@ -124,14 +135,13 @@ impl CombinedSolver {
             v: v_b,
             r: task.omega_max.clone(),
         };
-        ticks.push(combined(&state_a));
-        ticks.push(combined(&state_b));
+        push_best(&mut ticks, &mut global_best, combined(&state_a));
+        push_best(&mut ticks, &mut global_best, combined(&state_b));
 
         // --- Стадія 3: локальний пошук над кожним кандидатом ---
-        let (improved_a, ticks_a) = self.improve_with_restarts(task, &state_a);
-        let (improved_b, ticks_b) = self.improve_with_restarts(task, &state_b);
-        ticks.extend(ticks_a);
-        ticks.extend(ticks_b);
+        // improve* емітять best-so-far напряму у спільні (global_best, ticks).
+        let improved_a = self.improve_with_restarts(task, &state_a, &mut global_best, &mut ticks);
+        let improved_b = self.improve_with_restarts(task, &state_b, &mut global_best, &mut ticks);
 
         // --- Стадія 4: обрати кандидата з більшою сумарною вигодою ---
         let (best, source) = if combined(&improved_a) >= combined(&improved_b) {
@@ -140,23 +150,18 @@ impl CombinedSolver {
             (improved_b, "subtask_b_improved")
         };
 
-        // Графік збіжності: best-so-far. `ticks` досі містить «сирі» значення
-        // сумарної вигоди з 5 НЕЗАЛЕЖНИХ прогонів (стартів А/Б + збурених
-        // рестартів), конкатеновані в один вектор. Як єдина монотонна крива вони
-        // дають фізично неможливі падіння (кожен рестарт стартує з гіршої точки).
-        // Перетворюємо на накопичувальний максимум: крива не спадає і завершується
-        // рівно на сумарній вигоді переможця. Counter ітерацій у solve() — єдиний
-        // наскрізний (i+1), тож вісь X суцільна.
-        let mut running = f64::NEG_INFINITY;
-        for t in ticks.iter_mut() {
-            running = running.max(*t);
-            *t = running;
-        }
-        // Запобіжник: остання точка точно дорівнює збереженій сумарній вигоді.
+        // Запобіжник (warn-only): остання точка має дорівнювати сумарній вигоді
+        // переможця. За побудовою global_best = max по всіх тіках = combined(best),
+        // тож рівність виконується завжди; розбіжність сигналізує регресію
+        // телеметрії (повернення баґа зі «зшиванням» незалежних прогонів).
         let final_benefit = combined(&best);
-        match ticks.last_mut() {
-            Some(last) => *last = final_benefit,
+        match ticks.last() {
+            Some(&last) if (last - final_benefit).abs() > 1e-6 => eprintln!(
+                "[combined] tail tick ({last}) != final benefit ({final_benefit}) — \
+                 convergence telemetry regression"
+            ),
             None => ticks.push(final_benefit),
+            _ => {}
         }
 
         (best, source, ticks)
@@ -167,24 +172,38 @@ fn combined(s: &State) -> f64 {
     s.f_it + s.f_prov
 }
 
+/// Емітує накопичувальний максимум сумарної вигоди: оновлює `global_best` і
+/// додає його у `ticks`. Завдяки цьому серія тіків монотонно неспадна за
+/// побудовою — без жодного post-hoc згладжування на боці solve()/воркера.
+fn push_best(ticks: &mut Vec<f64>, global_best: &mut f64, value: f64) {
+    *global_best = global_best.max(value);
+    ticks.push(*global_best);
+}
+
 impl CombinedSolver {
     /// Локальний пошук зі структурного старту + опційні збурені рестарти.
-    /// Повертає найкращий стан і список тіків (сумарна вигода після кожного
-    /// прийнятого ходу), які `solve` потім транслює у callback.
-    fn improve_with_restarts(&self, task: &CombinedTask, start: &State) -> (State, Vec<f64>) {
-        let (mut best, mut ticks) = self.improve(task, start.clone());
+    /// Емітує best-so-far у спільні (`global_best`, `ticks`) на кожному
+    /// прийнятому ході (через `improve`), тож рестарти продовжують ту саму
+    /// монотонну криву. Повертає найкращий знайдений стан.
+    fn improve_with_restarts(
+        &self,
+        task: &CombinedTask,
+        start: &State,
+        global_best: &mut f64,
+        ticks: &mut Vec<f64>,
+    ) -> State {
+        let mut best = self.improve(task, start.clone(), global_best, ticks);
 
         for seed in 0..self.local_search_restarts {
             let perturbed = perturb(task, start, seed);
-            let (candidate, cand_ticks) = self.improve(task, perturbed);
-            ticks.extend(cand_ticks);
+            let candidate = self.improve(task, perturbed, global_best, ticks);
             // Збурені рестарти можуть давати Парето-незрівнянні розв'язки —
             // обираємо за більшою сумарною вигодою (узгоджено зі стадією 4).
             if combined(&candidate) > combined(&best) {
                 best = candidate;
             }
         }
-        (best, ticks)
+        best
     }
 
     /// Hill climbing з best-improvement та Парето-прийняттям.
@@ -207,9 +226,14 @@ impl CombinedSolver {
     /// f_it' ≥ f_it AND f_prov' ≥ f_prov, хоча б один строго більший
     /// (на ACCEPT_EPS), ресурс ≤ T і всі включені пари допустимі при r'.
     /// Серед прийнятих обираємо хід з найбільшим приростом (f_it' + f_prov').
-    fn improve(&self, task: &CombinedTask, start: State) -> (State, Vec<f64>) {
+    fn improve(
+        &self,
+        task: &CombinedTask,
+        start: State,
+        global_best: &mut f64,
+        ticks: &mut Vec<f64>,
+    ) -> State {
         let mut current = start;
-        let mut ticks: Vec<f64> = Vec::new();
 
         for step in 0..MAX_HILL_CLIMB_STEPS {
             let neighbours = self.neighbourhood(task, &current);
@@ -237,7 +261,7 @@ impl CombinedSolver {
             match best_next {
                 Some(next) => {
                     current = next;
-                    ticks.push(combined(&current));
+                    push_best(ticks, global_best, combined(&current));
                 }
                 None => break, // локальний оптимум
             }
@@ -250,7 +274,7 @@ impl CombinedSolver {
             }
         }
 
-        (current, ticks)
+        current
     }
 
     /// Генерує всі сусідні стани поточного (v, r). Повна енумерація — інстанси
