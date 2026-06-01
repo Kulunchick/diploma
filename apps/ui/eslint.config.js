@@ -67,9 +67,11 @@ export default tseslint.config(
         {
           default: 'disallow',
           rules: FSD_LAYERS.map((layer, i) => ({
-            from: layer,
+            from: { type: layer },
             // Allow: everything below this layer + the layer itself.
-            allow: [...FSD_LAYERS.slice(0, i), layer],
+            allow: {
+              to: { type: [...FSD_LAYERS.slice(0, i), layer] }
+            },
           })),
         },
       ],
