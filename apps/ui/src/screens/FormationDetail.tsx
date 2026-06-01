@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.tsx';
+import CompareScenarioDialog from '@/components/CompareScenarioDialog.tsx';
 import IterationChart, { ALGO_COLOR } from '@/components/IterationChart.tsx';
 import StatusBadge from '@/components/StatusBadge.tsx';
 import { ALGO_LABEL, formatParamValue, orderedParams } from '@/lib/algorithmParams';
@@ -97,7 +98,8 @@ export default function FormationDetail() {
               </Badge>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
+            <CompareScenarioDialog currentId={id} />
             <Button variant="outline" onClick={() => handleExport('json')}>Експорт JSON</Button>
             <Button variant="outline" onClick={() => handleExport('csv')}>Експорт CSV</Button>
           </div>
