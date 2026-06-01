@@ -63,6 +63,7 @@ async def _upsert(cells: list[PlanningCellUpsert], session: AsyncSession, user: 
             resource=cell.resource,
             provider_revenue=cell.provider_revenue,
             discount=cell.discount,
+            min_value=cell.min_value,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["service_id", "provider_id"],
@@ -71,6 +72,7 @@ async def _upsert(cells: list[PlanningCellUpsert], session: AsyncSession, user: 
                 "resource": stmt.excluded.resource,
                 "provider_revenue": stmt.excluded.provider_revenue,
                 "discount": stmt.excluded.discount,
+                "min_value": stmt.excluded.min_value,
             },
         )
         await session.execute(stmt)

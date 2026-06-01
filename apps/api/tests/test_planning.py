@@ -37,6 +37,29 @@ async def test_bulk_and_single_upsert(client, auth_headers):
     assert len(cells) == 2
 
 
+async def test_min_value_round_trips(client, auth_headers):
+    """s_ij (min_value) must persist through upsert and come back on read.
+    Regression: the planning schema once dropped the field silently, so the
+    combined method's constraint (4) always saw s_ij = 0."""
+    h = await auth_headers("plansij@example.com")
+    s, p = await _setup(client, h)
+
+    single = await client.put(
+        "/api/planning/cell",
+        json={
+            "service_id": s[0], "provider_id": p,
+            "price": 500, "resource": 1000, "discount": 0.1, "min_value": 0.45,
+        },
+        headers=h,
+    )
+    assert single.status_code == 200
+    assert single.json()["min_value"] == 0.45
+
+    cells = (await client.get("/api/planning", headers=h)).json()
+    cell = next(c for c in cells if c["service_id"] == s[0] and c["provider_id"] == p)
+    assert cell["min_value"] == 0.45
+
+
 async def test_discount_validation(client, auth_headers):
     h = await auth_headers("planval@example.com")
     s, p = await _setup(client, h)

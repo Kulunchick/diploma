@@ -16,6 +16,9 @@ class PlanningCellUpsert(BaseModel):
     resource: float = Field(default=0, ge=0)
     provider_revenue: float = Field(default=0, ge=0)
     discount: float = Field(default=0, ge=0, lt=1)
+    # s_ij — provider's minimum relative value; only constraint (4) of the
+    # combined method reads it. 0 disables the constraint.
+    min_value: float = Field(default=0, ge=0)
 
 
 class PlanningBulkUpsert(BaseModel):
@@ -32,3 +35,4 @@ class PlanningCellRead(BaseModel):
     resource: float
     provider_revenue: float
     discount: float
+    min_value: float
