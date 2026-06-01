@@ -1,11 +1,13 @@
 // Підзадача Б (провайдери) комбінованого методу — розділ 5.2 статті.
 //
 // Ймовірнісно-жадібний алгоритм, що максимізує сумарний дохід провайдерів
-//     F_prov = ΣΣ (1 − r_max_ij) · p_ij · v_ij
-// за спільним обмеженням на ресурс IT-компанії T та обмеженням (4).
+//     F_prov = ΣΣ p_ij · v_ij
+// за спільним обмеженням на ресурс IT-компанії T та обмеженням (4). p_ij —
+// дохід провайдера від кінцевих клієнтів; він НЕ залежить від знижки r
+// IT-компанії (уточнення формули (2), див. docs/combined-method.md).
 //
 // На відміну від підзадачі А, евристика тут — дохід провайдера на одиницю
-// ресурсу θ_ij = (1 − r_max_ij)·p_ij / β_ij. Пакети будуються по провайдерах
+// ресурсу θ_ij = p_ij / β_ij. Пакети будуються по провайдерах
 // (round-robin): на кожному кроці для поточного провайдера формується множина
 // допустимих пар (вистачає спільного ресурсу AND виконується (4) при r_max) і
 // одна обирається з імовірністю ∝ θ_ij. Знижки фіксовані на r_max.
@@ -14,14 +16,15 @@ use ndarray::Array2;
 use rand::{distr::weighted::WeightedIndex, prelude::*};
 
 use crate::combined_task::CombinedTask;
-use crate::common::weighted_objective;
+use crate::common::provider_objective;
 
-/// θ_ij = (1 − r_max_ij)·p_ij / β_ij (0, якщо β_ij = 0).
+/// θ_ij = p_ij / β_ij (0, якщо β_ij = 0). Дохід провайдера на одиницю ресурсу;
+/// знижка IT-компанії у чисельник не входить (p — клієнтський дохід провайдера).
 fn provider_heuristic(task: &CombinedTask) -> Array2<f64> {
     Array2::from_shape_fn((task.m, task.n), |(i, j)| {
         let b = task.b_ij[[i, j]];
         if b != 0 {
-            (1.0 - task.omega_max[[i, j]]) * task.p_ij[[i, j]] as f64 / b as f64
+            task.p_ij[[i, j]] as f64 / b as f64
         } else {
             0.0
         }
@@ -82,7 +85,7 @@ pub fn solve_subtask_b(task: &CombinedTask, kmax: usize) -> (Array2<i64>, f64) {
 
     for _ in 0..kmax {
         let v = construct_provider_solution(task, &score);
-        let f = weighted_objective(&v, &task.p_ij, &task.omega_max);
+        let f = provider_objective(&v, &task.p_ij);
         if f > f_best {
             f_best = f;
             v_best.assign(&v);

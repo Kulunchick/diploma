@@ -18,7 +18,7 @@ use numpy::ToPyArray;
 use pyo3::{prelude::*, types::PyDict};
 
 use crate::combined_task::CombinedTask;
-use crate::common::weighted_objective;
+use crate::common::{provider_objective, weighted_objective};
 use crate::solvers::subtask_a::solve_subtask_a;
 use crate::solvers::subtask_b::solve_subtask_b;
 
@@ -114,7 +114,7 @@ impl CombinedSolver {
         // --- Стадія 2: крос-оцінка обох розв'язків у двох критеріях ---
         let state_a = State {
             f_it: f_it_a,
-            f_prov: weighted_objective(&v_a, &task.p_ij, &task.omega_max),
+            f_prov: provider_objective(&v_a, &task.p_ij),
             v: v_a,
             r: task.omega_max.clone(),
         };
@@ -193,13 +193,15 @@ impl CombinedSolver {
     ///   (1) додати пару (v=0→1), якщо вистачає ресурсу і пара допустима при r;
     ///   (2) прибрати пару (v=1→0), звільнивши ресурс;
     ///   (3) знижка −step на включеній парі: r_ij ← max(0, r_ij − step).
-    ///       Менша r ⇒ більший (1 − r) ⇒ зростають ОБИДВА доходи цієї пари
-    ///       (IT-компанія дає меншу знижку — чистий приріст доходу), і
-    ///       допустимість (4) лише покращується;
+    ///       Менша r ⇒ більший (1 − r) ⇒ зростає F_IT цієї пари (IT-компанія дає
+    ///       меншу знижку — чистий приріст доходу IT). F_prov не залежить від r
+    ///       (сирий p), тож лишається незмінним → хід Парето-кращий (F_IT↑,
+    ///       F_prov=). Допустимість (4) лише покращується;
     ///   (4) знижка +step на включеній парі: r_ij ← min(r_max_ij, r_ij + step).
-    ///       Більша r знижує обидва доходи пари, АЛЕ може зробити допустимою
-    ///       раніше недопустиму пару — тому має сенс лише у складеному ході
-    ///       глибини 2: «підняти r на (i,j) ТА додати (k,l), що стала допустимою».
+    ///       Більша r знижує F_IT пари (F_prov незмінний), АЛЕ може зробити
+    ///       допустимою раніше недопустиму пару — тому має сенс лише у складеному
+    ///       ході глибини 2: «підняти r на (i,j) ТА додати (k,l), що стала
+    ///       допустимою» (додавання (k,l) дає +p_kl до F_prov і +(1−r)d_kl до F_IT).
     ///
     /// Прийняття (Парето): хід до (v', r') приймається лише якщо
     /// f_it' ≥ f_it AND f_prov' ≥ f_prov, хоча б один строго більший
@@ -314,11 +316,12 @@ impl CombinedSolver {
     }
 }
 
-/// Перераховує цільові функції для (v, r) і пакує у State.
+/// Перераховує цільові функції для (v, r) і пакує у State. F_IT залежить від r
+/// (множник (1−r) на ціні), F_prov — НІ (сирий Σp·v, клієнтський дохід).
 fn rebuild(task: &CombinedTask, v: Array2<i64>, r: Array2<f64>) -> State {
     State {
         f_it: weighted_objective(&v, &task.c, &r),
-        f_prov: weighted_objective(&v, &task.p_ij, &r),
+        f_prov: provider_objective(&v, &task.p_ij),
         v,
         r,
     }
@@ -444,12 +447,11 @@ mod tests {
         // Стартові кандидати при r_max (вони ж — точки старту стадії 3).
         let (v_a, f_it_a) = solve_subtask_a(&task, 200);
         let (v_b, f_prov_b) = solve_subtask_b(&task, 200);
-        let combined_a = f_it_a + weighted_objective(&v_a, &task.p_ij, &task.omega_max);
+        let combined_a = f_it_a + provider_objective(&v_a, &task.p_ij);
         let combined_b = weighted_objective(&v_b, &task.c, &task.omega_max) + f_prov_b;
 
-        // Істинні верхні межі окремих критеріїв (знижки оптимізовані до 0).
+        // Істинна верхня межа F_IT (знижки оптимізовані до 0).
         let (_, f_it_upper) = solve_subtask_a(&zero, 200);
-        let (_, f_prov_upper) = solve_subtask_b(&zero, 200);
 
         let solver = CombinedSolver::new(200, 0.05, 0);
         let (best, _source, _ticks) = solver.solve_core(&task);
@@ -458,8 +460,10 @@ mod tests {
         // однокритеріальну стартову — стадія 3 лише Парето-покращує, тож сума
         // F_IT + F_prov ніколи не спадає нижче точок старту.
         assert!(best.f_it + best.f_prov >= combined_a.max(combined_b) - 1e-6);
-        // Інваріанти 1–2: жоден критерій не перевищує свого істинного оптимуму.
+        // Інваріант 1: F_IT не перевищує свого істинного оптимуму (при r = 0).
         assert!(best.f_it <= f_it_upper + 1e-6);
-        assert!(best.f_prov <= f_prov_upper + 1e-6);
+        // Інваріант 2: F_prov = Σp·v не залежить від r, тож межа — призначити всі
+        // пари: F_prov ≤ Σ p_ij.
+        assert!(best.f_prov <= task.p_ij.sum() as f64 + 1e-6);
     }
 }

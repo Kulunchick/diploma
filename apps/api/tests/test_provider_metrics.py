@@ -34,11 +34,11 @@ _V = [[1, 0], [0, 1]]  # s1→provider0, s2→provider1
 
 def test_compute_provider_metrics_planning_discount():
     f_prov, profit, total = compute_provider_metrics(_SERVICE_CELLS, _UNIT_ORDER, _V)
-    # s1: (1-.1)*80=72 ; s2: (1-.25)*50=37.5
-    assert f_prov == pytest.approx(109.5)
+    # F_prov is raw Σp·v: 80 + 50
+    assert f_prov == pytest.approx(130.0)
     # profit: (80-.9*100) + (50-.75*200) = -10 + -100
     assert profit == pytest.approx(-110.0)
-    assert total == pytest.approx(130.0)  # 80 + 50
+    assert total == pytest.approx(130.0)  # 80 + 50 == F_prov
 
 
 def test_compute_provider_metrics_final_discount():
@@ -46,22 +46,24 @@ def test_compute_provider_metrics_final_discount():
     f_prov, profit, total = compute_provider_metrics(
         _SERVICE_CELLS, _UNIT_ORDER, _V, final_discount=final
     )
-    # s1: .5*80=40 ; s2: .5*50=25
-    assert f_prov == pytest.approx(65.0)
+    # F_prov raw Σp·v — unchanged by the discount.
+    assert f_prov == pytest.approx(130.0)
     # profit: (80-.5*100) + (50-.5*200) = 30 + -50
     assert profit == pytest.approx(-20.0)
     assert total == pytest.approx(130.0)
 
 
-def test_planning_and_final_discount_differ():
-    """probabilistic/ant use planning r, combined uses r_final — F_prov must
-    differ when the negotiated discount differs from planning on a chosen pair."""
-    planning, _, _ = compute_provider_metrics(_SERVICE_CELLS, _UNIT_ORDER, _V)
+def test_discount_affects_profit_not_revenue():
+    """F_prov is raw Σp·v → identical regardless of discount. Only provider_profit
+    depends on r, so planning vs negotiated discount changes the profit, not F_prov.
+    (probabilistic/ant use planning r; combined uses r_final.)"""
+    fprov_pl, profit_pl, _ = compute_provider_metrics(_SERVICE_CELLS, _UNIT_ORDER, _V)
     final = [[0.5, 0.0], [0.0, 0.5]]
-    negotiated, _, _ = compute_provider_metrics(
+    fprov_fn, profit_fn, _ = compute_provider_metrics(
         _SERVICE_CELLS, _UNIT_ORDER, _V, final_discount=final
     )
-    assert planning != pytest.approx(negotiated)
+    assert fprov_pl == pytest.approx(fprov_fn)  # F_prov unchanged by r
+    assert profit_pl != pytest.approx(profit_fn)  # profit differs with r
 
 
 @pytest.mark.parametrize(
@@ -69,7 +71,7 @@ def test_planning_and_final_discount_differ():
     [None, [[0.3, 0.0], [0.0, 0.4]], [[0.0, 0.0], [0.0, 0.0]], [[0.9, 0.0], [0.0, 0.9]]],
 )
 def test_discount_invariance_identity(final):
-    """F_IT + provider_profit == Σ p·v for any discount (all algorithms)."""
+    """F_IT + provider_profit == Σ p·v == F_prov for any discount (all algorithms)."""
     f_prov, profit, total = compute_provider_metrics(
         _SERVICE_CELLS, _UNIT_ORDER, _V, final_discount=final
     )
@@ -84,6 +86,7 @@ def test_discount_invariance_identity(final):
                 r = final[u][j] if final is not None else _SERVICE_CELLS[sid]["discount"][j]
                 f_it += (1.0 - r) * d
     assert f_it + profit == pytest.approx(total, abs=1e-9)
+    assert f_prov == pytest.approx(total, abs=1e-9)  # F_prov == Σp·v exactly
 
 
 # ---------------------------------------------------------------------------
@@ -160,8 +163,9 @@ async def test_metrics_populated_for_single_algorithms(
 
 async def test_backfill_repopulates_from_snapshot(client, auth_headers, mock_temporal):
     """Simulate a pre-migration scenario by NULLing the provider columns, then
-    run the 0003 backfill computation (assignment rows + snapshot
-    provider_revenue) and assert it reproduces what persist computed."""
+    run the 0004 backfill computation (assignment rows + snapshot
+    provider_revenue, F_prov = raw Σp·v) and assert it reproduces what persist
+    computed."""
     from sqlalchemy import text
 
     import worker.activities as wa
@@ -210,7 +214,7 @@ async def test_backfill_repopulates_from_snapshot(client, auth_headers, mock_tem
             p = float(cells[str(service_id)]["provider_revenue"][j])
             dd = float(price or 0)
             r = float(final_discount if final_discount is not None else (discount or 0))
-            f_prov += (1.0 - r) * p
+            f_prov += p  # raw Σp·v (0004), matches persist
             profit += p - (1.0 - r) * dd
         await s.execute(text(
             "UPDATE formation_scenarios SET provider_value = :pv, provider_profit = :pp "

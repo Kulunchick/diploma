@@ -315,11 +315,12 @@ async def _build_detail(
         total_resource += resource_used
 
         # Per-pair provider metrics, matching compute_provider_metrics term for
-        # term: r is the applied discount (final for combined, planning else).
+        # term: provider revenue is the raw client-side p_ij (no discount); the
+        # discount r (final for combined, planning else) only enters the profit.
         price = float(a.price or 0)
         r = float(a.final_discount) if a.final_discount is not None else float(a.discount or 0)
         p_ij = provider_revenue_for(str(a.service_id), j)
-        provider_revenue_pair = (1.0 - r) * p_ij if p_ij is not None else None
+        provider_revenue_pair = p_ij if p_ij is not None else None
         provider_profit_pair = p_ij - (1.0 - r) * price if p_ij is not None else None
 
         rows.append(

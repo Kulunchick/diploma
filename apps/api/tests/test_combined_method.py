@@ -50,7 +50,20 @@ def _task(omega_max=None) -> CombinedTask:
 
 
 def _f(v, value, r):
+    """Discounted sum Σ(1−r)·value·v — used for F_IT (value = prices C)."""
     return float(sum((1.0 - r[i, j]) * value[i, j]
+                     for i in range(v.shape[0]) for j in range(v.shape[1]) if v[i, j] == 1))
+
+
+def _fprov(v):
+    """Raw provider revenue Σ p·v — F_prov no longer carries the (1−r) factor."""
+    return float(sum(P[i, j]
+                     for i in range(v.shape[0]) for j in range(v.shape[1]) if v[i, j] == 1))
+
+
+def _profit(v, r):
+    """Σ (p − (1−r)·d)·v — provider profit (still uses r, on the price side)."""
+    return float(sum(P[i, j] - (1.0 - r[i, j]) * C[i, j]
                      for i in range(v.shape[0]) for j in range(v.shape[1]) if v[i, j] == 1))
 
 
@@ -70,8 +83,11 @@ def _solve(**params):
 def test_return_contract_consistent():
     out, v, r = _solve()
     assert out["f_it"] == pytest.approx(_f(v, C, r), abs=1e-6)
-    assert out["f_prov"] == pytest.approx(_f(v, P, r), abs=1e-6)
+    # F_prov is raw Σp·v, independent of r.
+    assert out["f_prov"] == pytest.approx(_fprov(v), abs=1e-6)
     assert out["source"] in ("subtask_a_improved", "subtask_b_improved")
+    # Exact identity after the refinement: F_IT + provider_profit == F_prov.
+    assert out["f_it"] + _profit(v, r) == pytest.approx(out["f_prov"], abs=1e-6)
 
 
 def test_convergence_ticks_are_monotonic_best_so_far():
@@ -99,8 +115,9 @@ def test_invariants_1_2_3():
     assert out["f_it"] <= C.sum() + 1e-6
     assert out["f_prov"] <= P.sum() + 1e-6
     # (3): benefit ≥ the same structure evaluated at r_max (lowering r never hurt).
+    # F_prov is r-independent (raw Σp·v); only the F_IT part moves with r.
     benefit = out["f_it"] + out["f_prov"]
-    benefit_at_rmax = _f(v, C, np.full((4, 2), R_MAX)) + _f(v, P, np.full((4, 2), R_MAX))
+    benefit_at_rmax = _f(v, C, np.full((4, 2), R_MAX)) + _fprov(v)
     assert benefit >= benefit_at_rmax - 1e-6
     # resource feasibility
     used = sum(B[i, j] for i in range(4) for j in range(2) if v[i, j] == 1)
@@ -136,7 +153,7 @@ def test_ignore_discounts_stays_feasible():
     a valid, self-consistent, resource-feasible solution that respects (4)."""
     out, v, r = _solve(omega_max=np.full((4, 2), 0.95))
     assert out["f_it"] == pytest.approx(_f(v, C, r), abs=1e-6)
-    assert out["f_prov"] == pytest.approx(_f(v, P, r), abs=1e-6)
+    assert out["f_prov"] == pytest.approx(_fprov(v), abs=1e-6)
     used = sum(B[i, j] for i in range(4) for j in range(2) if v[i, j] == 1)
     assert used <= B_TOTAL
     for i in range(4):

@@ -358,7 +358,7 @@ export interface FormationAssignment {
   group_name: string | null;
   /** The discount actually applied (negotiated for combined; = discount else). */
   final_discount: number | null;
-  /** Per-pair provider gross revenue = (1 − final_discount)·p_ij. */
+  /** Per-pair provider gross revenue = raw p_ij (no discount). */
   provider_revenue_pair: number | null;
   /** Per-pair provider profit = p_ij − (1 − final_discount)·price. */
   provider_profit_pair: number | null;

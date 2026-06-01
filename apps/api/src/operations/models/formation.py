@@ -48,7 +48,8 @@ class FormationAssignmentRead(BaseModel):
     final_discount: float | None = None
     # Per-pair provider metrics — the summands of the scenario-level
     # provider_value / provider_profit (so the table columns sum to the cards).
-    # provider_revenue_pair = (1 − r)·p_ij ; provider_profit_pair = p_ij − (1 − r)·price.
+    # provider_revenue_pair = p_ij (raw client revenue, no discount);
+    # provider_profit_pair = p_ij − (1 − r)·price.
     # None when the snapshot lacks per-pair provider_revenue (legacy scenarios).
     provider_revenue_pair: float | None = None
     provider_profit_pair: float | None = None
