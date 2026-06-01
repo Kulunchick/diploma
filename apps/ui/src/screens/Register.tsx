@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
 import { useAuthStore } from '@shared/zustand/useAuthStore';
 import * as authApi from '@/api/auth';
+import { ROUTES } from '@shared/config/routes';
 
 const schema = z.object({
   email: z.string().email('Невірний формат email'),
@@ -20,8 +21,6 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function Register() {
-  const navigate = useNavigate();
-
   const {
     register,
     handleSubmit,
@@ -31,10 +30,11 @@ export default function Register() {
   const onSubmit = async (values: FormValues) => {
     try {
       const res = await authApi.register(values.email, values.password, values.full_name || undefined);
-      useAuthStore.getState().setToken(res.access_token);
-      useAuthStore.getState().setUser(res.user);
+      // Atomically set token + user + redirect destination in one store update.
+      // RedirectIfAuthenticated reads pendingNavigation and fires the <Navigate>.
+      // Do NOT call navigate() here — it would race with the render-time <Navigate>.
+      useAuthStore.getState().loginSuccess(res.access_token, res.user, ROUTES.services);
       toast.success('Акаунт створено');
-      navigate('/services', { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не вдалося зареєструватися');
     }

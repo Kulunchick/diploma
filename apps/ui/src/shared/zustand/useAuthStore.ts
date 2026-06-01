@@ -10,8 +10,20 @@ const TOKEN_KEY = 'token';
 interface AuthState {
   token: string | null;
   user: User | null;
+  /**
+   * True while /auth/me is in-flight (hydrate) OR immediately after persist
+   * rehydration when a stored token exists but user hasn't been fetched yet.
+   * RequireAuth shows a spinner (not a redirect) while this is true.
+   */
   loading: boolean;
-  setToken: (token: string) => void;
+  /**
+   * Where to navigate after a successful login/register. Set atomically with
+   * the auth state so RedirectIfAuthenticated uses it as the <Navigate>
+   * destination — one update, one redirect, no race with explicit navigate().
+   */
+  pendingNavigation: string | null;
+  /** Atomically set token + user + where to redirect next. */
+  loginSuccess: (token: string, user: User, redirectTo?: string) => void;
   clearToken: () => void;
   setUser: (user: User | null) => void;
   /** Called once on app mount: resolves stored token against /auth/me. */
@@ -24,16 +36,21 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       loading: false,
+      pendingNavigation: null,
 
-      setToken: (token) => set({ token }),
+      loginSuccess: (token, user, redirectTo) =>
+        set({ token, user, pendingNavigation: redirectTo ?? null }),
 
-      clearToken: () => set({ token: null, user: null }),
+      clearToken: () => set({ token: null, user: null, pendingNavigation: null }),
 
       setUser: (user) => set({ user }),
 
       hydrate: async () => {
         const { token } = get();
-        if (!token) return;
+        if (!token) {
+          set({ loading: false });
+          return;
+        }
 
         set({ loading: true });
         try {
@@ -59,8 +76,15 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: TOKEN_KEY,
-      // Only persist the token; user is re-fetched on hydrate.
+      // Only persist the token; user is re-fetched on every hydrate().
       partialize: (state) => ({ token: state.token }),
+      // When a stored token is found on page load, pre-set loading=true so
+      // RequireAuth shows a spinner (not a redirect) until hydrate() resolves.
+      onRehydrateStorage: () => (state) => {
+        if (state?.token) {
+          state.loading = true;
+        }
+      },
     },
   ),
 );

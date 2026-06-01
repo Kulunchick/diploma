@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -9,7 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.t
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
 import { useAuthStore } from '@shared/zustand/useAuthStore';
+import { ApiError } from '@shared/api/error';
+import { API_BASE_URL } from '@shared/config/env';
 import * as authApi from '@/api/auth';
+import type { User } from '@shared/types/user';
 
 const schema = z.object({
   email: z.string().email('Невірний формат email'),
@@ -19,7 +22,6 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function Login() {
-  const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/services';
 
@@ -32,11 +34,15 @@ export default function Login() {
   const onSubmit = async (values: FormValues) => {
     try {
       const { access_token } = await authApi.login(values.email, values.password);
-      useAuthStore.getState().setToken(access_token);
-      const user = await authApi.getMe();
-      useAuthStore.getState().setUser(user);
+      // Fetch user with the fresh token before writing to the store, then
+      // set token + user + redirect destination in ONE atomic update.
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      if (!res.ok) throw new ApiError(res.status, 'Не вдалося отримати дані профілю');
+      const user: User = await res.json();
+      useAuthStore.getState().loginSuccess(access_token, user, from);
       toast.success('Вхід виконано');
-      navigate(from, { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не вдалося увійти');
     }
