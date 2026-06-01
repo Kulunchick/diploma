@@ -99,23 +99,20 @@ export default function FormationDetail() {
         <CardContent className="flex flex-col gap-4">
           {d.error && <p className="text-destructive text-sm">{d.error}</p>}
 
-          {isCombined ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Stat label="Дохід IT-компанії (F_IT)" value={d.value != null ? fmt(d.value) : '—'} />
-              <Stat label="Дохід провайдерів (F_prov)" value={d.provider_value != null ? fmt(d.provider_value) : '—'} />
-              <Stat label="Сумарна вигода (F_IT + F_prov)" value={d.combined_benefit != null ? fmt(d.combined_benefit) : '—'} />
-              <Stat label="Викор. ресурс" value={totalsMemo ? fmt(totalsMemo.total_resource_used) : '—'} />
-              <Stat label="Провайдерів" value={String(totalsMemo?.provider_count ?? 0)} />
-              <Stat label="Сервісів" value={String(totalsMemo?.service_count ?? 0)} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Stat label="Дохід IT-компанії (F)" value={d.value != null ? fmt(d.value) : '—'} />
-              <Stat label="Викор. ресурс" value={totalsMemo ? fmt(totalsMemo.total_resource_used) : '—'} />
-              <Stat label="Провайдерів" value={String(totalsMemo?.provider_count ?? 0)} />
-              <Stat label="Сервісів" value={String(totalsMemo?.service_count ?? 0)} />
-            </div>
-          )}
+          {/* Four uniform value cards for every algorithm: F_IT, F_prov
+              (gross), provider profit (net), and the discount-invariant
+              created value (F_IT + provider profit). */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Stat label="Дохід IT-компанії (F_IT)" value={d.value != null ? fmt(d.value) : '—'} />
+            <Stat label="Дохід провайдерів (F_prov)" value={d.provider_value != null ? fmt(d.provider_value) : '—'} />
+            <Stat label="Прибуток провайдерів" value={d.provider_profit != null ? fmt(d.provider_profit) : '—'} />
+            <Stat label="Створена цінність (F_IT + прибуток пров.)" value={d.created_value != null ? fmt(d.created_value) : '—'} />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Stat label="Викор. ресурс" value={totalsMemo ? fmt(totalsMemo.total_resource_used) : '—'} />
+            <Stat label="Провайдерів" value={String(totalsMemo?.provider_count ?? 0)} />
+            <Stat label="Сервісів" value={String(totalsMemo?.service_count ?? 0)} />
+          </div>
           <div className="text-sm text-muted-foreground">Загальний ресурс T = {fmt(d.b_total)}</div>
         </CardContent>
       </Card>

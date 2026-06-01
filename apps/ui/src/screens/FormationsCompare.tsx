@@ -114,6 +114,8 @@ export default function FormationsCompare() {
               </TableRow>
               {valueRow('Дохід IT-компанії (F_IT)', (s) => s.value)}
               {valueRow('Дохід провайдерів (F_prov)', (s) => s.provider_value)}
+              {valueRow('Прибуток провайдерів', (s) => s.provider_profit)}
+              {valueRow('Створена цінність (F_IT + прибуток пров.)', (s) => s.created_value)}
               {valueRow('Сумарна вигода (F_IT + F_prov)', (s) => s.combined_benefit)}
               {valueRow('Викор. ресурс', (s) => s.total_resource_used, false)}
             </TableBody>

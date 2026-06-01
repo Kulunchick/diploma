@@ -195,9 +195,12 @@ class FormationScenario(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Combined-method only: F_prov, and which improved candidate won stage 4.
-    # value stores F_IT for all algorithms; these stay NULL for the other two.
+    # value stores F_IT for all algorithms. provider_value (F_prov, gross) and
+    # provider_profit (net of what the provider pays the IT-company) are now
+    # computed and stored for every algorithm. combined_source is set only by
+    # the combined method (which improved candidate won stage 4).
     provider_value: Mapped[float | None] = mapped_column(Double, nullable=True)
+    provider_profit: Mapped[float | None] = mapped_column(Double, nullable=True)
     combined_source: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     assignments: Mapped[list["FormationAssignment"]] = relationship(

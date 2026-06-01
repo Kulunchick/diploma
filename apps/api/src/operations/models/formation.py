@@ -61,8 +61,13 @@ class FormationDetail(BaseModel):
     algorithm: str
     status: str
     value: float | None = None
-    # Combined-method only: F_prov, winning candidate, and value + provider_value.
+    # Provider revenue (gross) and profit (net of what the provider pays the
+    # IT-company) — populated for all algorithms. created_value = value +
+    # provider_profit is the discount-invariant total value created.
     provider_value: float | None = None
+    provider_profit: float | None = None
+    created_value: float | None = None
+    # Combined-method only: winning candidate + value + provider_value.
     combined_source: str | None = None
     combined_benefit: float | None = None
     b_total: float
@@ -89,6 +94,8 @@ class CompareScenario(BaseModel):
     status: str
     value: float | None = None
     provider_value: float | None = None
+    provider_profit: float | None = None
+    created_value: float | None = None
     combined_benefit: float | None = None
     b_total: float
     params: dict

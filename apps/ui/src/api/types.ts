@@ -373,8 +373,12 @@ export interface FormationDetail {
   algorithm: FormationAlgorithm;
   status: FormationStatus;
   value: number | null;
-  /** Combined-method only: F_prov, winning candidate, and value + provider_value. */
+  /** Provider revenue (gross) and profit (net) — populated for all algorithms. */
   provider_value: number | null;
+  provider_profit: number | null;
+  /** value + provider_profit — discount-invariant total value created. */
+  created_value: number | null;
+  /** Combined-method only: winning candidate, and value + provider_value. */
   combined_source: string | null;
   combined_benefit: number | null;
   b_total: number;
@@ -401,6 +405,8 @@ export interface CompareScenario {
   status: FormationStatus;
   value: number | null;
   provider_value: number | null;
+  provider_profit: number | null;
+  created_value: number | null;
   combined_benefit: number | null;
   b_total: number;
   params: Record<string, number | boolean>;

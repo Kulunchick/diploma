@@ -17,6 +17,7 @@ from sqlalchemy import text
 from temporalio import activity
 
 from worker.db import AsyncSessionLocal
+from worker.metrics import compute_provider_metrics
 from worker.types import (
     AntColonyParams,
     CombinedResult,
@@ -308,6 +309,18 @@ async def persist_formation_result_activity(input: PersistFormationInput) -> Non
                 input.scenario_id, total_eff, input.value,
             )
 
+        # Provider-side metrics for the non-optimised side. probabilistic and
+        # ant-colony never move the discount, so use the planning discount frozen
+        # in the snapshot (final_discount=None → per-service planning r).
+        f_prov, provider_profit, total_value = compute_provider_metrics(
+            service_cells, unit_order, input.solution, final_discount=None
+        )
+        if abs((input.value + provider_profit) - total_value) > 1e-6:
+            logging.getLogger(__name__).warning(
+                "Formation %s: identity F_IT+profit (%.6f) ≠ Σp·v (%.6f)",
+                input.scenario_id, input.value + provider_profit, total_value,
+            )
+
         # Drain the convergence history (best-effort: Redis problems must not
         # block marking the scenario completed). Idempotent via ON CONFLICT.
         try:
@@ -330,10 +343,16 @@ async def persist_formation_result_activity(input: PersistFormationInput) -> Non
         await session.execute(
             text(
                 "UPDATE formation_scenarios "
-                "SET status = 'completed', value = :val, finished_at = now() "
+                "SET status = 'completed', value = :val, provider_value = :pval, "
+                "provider_profit = :pprofit, finished_at = now() "
                 "WHERE id = CAST(:sid AS uuid)"
             ),
-            {"val": input.value, "sid": input.scenario_id},
+            {
+                "val": input.value,
+                "pval": f_prov,
+                "pprofit": provider_profit,
+                "sid": input.scenario_id,
+            },
         )
         await session.commit()
 
@@ -421,6 +440,23 @@ async def persist_combined_result_activity(input: PersistCombinedInput) -> None:
                 input.scenario_id, total_eff, input.f_it,
             )
 
+        # Provider metrics from the snapshot using the negotiated discount r_final
+        # (the lever the combined method actually moved). f_prov recomputed here
+        # should match the solver's F_prov; a divergence flags an aggregation bug.
+        f_prov, provider_profit, total_value = compute_provider_metrics(
+            service_cells, unit_order, input.v_final, final_discount=input.r_final
+        )
+        if abs(f_prov - input.f_prov) > 1e-6:
+            logging.getLogger(__name__).warning(
+                "Combined %s: recomputed F_prov (%.6f) diverges from solver F_prov (%.6f)",
+                input.scenario_id, f_prov, input.f_prov,
+            )
+        if abs((input.f_it + provider_profit) - total_value) > 1e-6:
+            logging.getLogger(__name__).warning(
+                "Combined %s: identity F_IT+profit (%.6f) ≠ Σp·v (%.6f)",
+                input.scenario_id, input.f_it + provider_profit, total_value,
+            )
+
         # Drain the convergence history (best-effort), same as the single path.
         try:
             history = await _read_iteration_history(input.redis_channel)
@@ -456,12 +492,13 @@ async def persist_combined_result_activity(input: PersistCombinedInput) -> None:
             text(
                 "UPDATE formation_scenarios "
                 "SET status = 'completed', value = :val, provider_value = :pval, "
-                "combined_source = :src, finished_at = now() "
+                "provider_profit = :pprofit, combined_source = :src, finished_at = now() "
                 "WHERE id = CAST(:sid AS uuid)"
             ),
             {
                 "val": input.f_it,
-                "pval": input.f_prov,
+                "pval": f_prov,
+                "pprofit": provider_profit,
                 "src": input.source,
                 "sid": input.scenario_id,
             },

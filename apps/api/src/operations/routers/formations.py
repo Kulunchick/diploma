@@ -333,6 +333,13 @@ async def _build_detail(
         if scenario.value is not None and scenario.provider_value is not None
         else None
     )
+    # created_value = F_IT + provider_profit (discount-invariant total value),
+    # populated for every algorithm once both are stored.
+    created_value = (
+        float(scenario.value) + float(scenario.provider_profit)
+        if scenario.value is not None and scenario.provider_profit is not None
+        else None
+    )
     return FormationDetail(
         id=scenario.id,
         name=scenario.name,
@@ -340,6 +347,8 @@ async def _build_detail(
         status=scenario.status,
         value=scenario.value,
         provider_value=scenario.provider_value,
+        provider_profit=scenario.provider_profit,
+        created_value=created_value,
         combined_source=scenario.combined_source,
         combined_benefit=combined_benefit,
         b_total=float(scenario.b_total),
@@ -611,6 +620,21 @@ async def export_csv(
 
     buf = io.StringIO()
     writer = csv.writer(buf)
+
+    # Scenario-level summary block (totals), then a blank line, then the
+    # per-assignment rows. "—" for metrics not yet backfilled on old scenarios.
+    def _num(x: float | None) -> str:
+        return "" if x is None else f"{x:.4f}"
+
+    writer.writerow(["metric", "value"])
+    writer.writerow(["algorithm", detail.algorithm])
+    writer.writerow(["f_it", _num(detail.value)])
+    writer.writerow(["provider_revenue", _num(detail.provider_value)])
+    writer.writerow(["provider_profit", _num(detail.provider_profit)])
+    writer.writerow(["created_value", _num(detail.created_value)])
+    writer.writerow(["combined_benefit", _num(detail.combined_benefit)])
+    writer.writerow([])
+
     writer.writerow([
         "service", "provider", "price", "discount", "final_discount",
         "effective_revenue", "resource_used",
@@ -663,6 +687,8 @@ async def compare_formations(
                 status=scenario.status,
                 value=scenario.value,
                 provider_value=scenario.provider_value,
+                provider_profit=scenario.provider_profit,
+                created_value=detail.created_value,
                 combined_benefit=detail.combined_benefit,
                 b_total=float(scenario.b_total),
                 params=scenario.params,

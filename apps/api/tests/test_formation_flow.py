@@ -121,8 +121,14 @@ async def test_csv_export(client, auth_headers, mock_temporal):
     assert "text/csv" in res.headers["content-type"]
     assert "attachment" in res.headers["content-disposition"]
     lines = res.text.strip().splitlines()
-    assert lines[0] == "service,provider,price,discount,final_discount,effective_revenue,resource_used"
-    assert len(lines) == 2  # header + one assignment
+    # Scenario-level summary block first, then a blank line, then assignments.
+    assert lines[0] == "metric,value"
+    assert any(line.startswith("provider_revenue,") for line in lines)
+    assert any(line.startswith("provider_profit,") for line in lines)
+    header = "service,provider,price,discount,final_discount,effective_revenue,resource_used"
+    assert header in lines
+    hdr_idx = lines.index(header)
+    assert len(lines) - hdr_idx - 1 == 1  # exactly one assignment row after the header
 
 
 # ---------------------------------------------------------------------------
