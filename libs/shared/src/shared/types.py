@@ -60,7 +60,8 @@ class SingleSolveInput(BaseModel):
     probabilistic: ProbabilisticParams = ProbabilisticParams()
     # Constraint (4): provider revenue p_ij and relative-value thresholds s_ij.
     # Enforced for these two algorithms too (admissibility at the planning r).
-    p_ij: list[list[int]] | None = None
+    # p_ij is a monetary value (may be fractional) — float, unlike price/resource.
+    p_ij: list[list[float]] | None = None
     s_ij: list[list[float]] | None = None
     scenario_id: str
     redis_channel: str | None = None
@@ -86,7 +87,7 @@ class CombinedSolveInput(BaseModel):
     n: int
     c: list[list[int]]
     b_ij: list[list[int]]
-    p_ij: list[list[int]]
+    p_ij: list[list[float]]
     omega_max: list[list[float]]
     s_ij: list[list[float]]
     b_total: int

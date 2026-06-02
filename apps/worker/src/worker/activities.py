@@ -50,9 +50,9 @@ async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
     # s = 0 → every pair admissible (identical to the pre-(4) behaviour).
     m, n = input.m, input.n
     p_ij = (
-        np.array(input.p_ij, dtype=np.int64)
+        np.array(input.p_ij, dtype=np.float64)
         if input.p_ij is not None
-        else np.zeros((m, n), dtype=np.int64)
+        else np.zeros((m, n), dtype=np.float64)
     )
     s_ij = (
         np.array(input.s_ij, dtype=np.float64)
@@ -163,7 +163,7 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
         input.n,
         np.array(input.c, dtype=np.int64),
         np.array(input.b_ij, dtype=np.int64),
-        np.array(input.p_ij, dtype=np.int64),
+        np.array(input.p_ij, dtype=np.float64),
         np.array(input.omega_max, dtype=np.float64),
         np.array(input.s_ij, dtype=np.float64),
         int(input.b_total),

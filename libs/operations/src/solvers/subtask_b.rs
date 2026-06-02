@@ -24,7 +24,7 @@ fn provider_heuristic(task: &CombinedTask) -> Array2<f64> {
     Array2::from_shape_fn((task.m, task.n), |(i, j)| {
         let b = task.b_ij[[i, j]];
         if b != 0 {
-            task.p_ij[[i, j]] as f64 / b as f64
+            task.p_ij[[i, j]] / b as f64
         } else {
             0.0
         }

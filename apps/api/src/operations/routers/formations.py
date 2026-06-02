@@ -92,7 +92,8 @@ def _build_payload(
 
     Solver subtask A operates on integer prices/resources per the article §5.1;
     NUMERIC storage allows future precision but is truncated at the boundary
-    (price → int, resource → int, b_total → int). Discounts stay float.
+    (price → int, resource → int, b_total → int). Discounts and provider revenue
+    p stay float (p is a monetary value, used as-is by the solver and metrics).
 
     Per (unit, provider):
         c_unit     = Σ price_i
@@ -158,7 +159,7 @@ def _build_payload(
     c_matrix: list[list[int]] = []
     b_ij: list[list[int]] = []
     omega: list[list[float]] = []
-    p_matrix: list[list[int]] = []
+    p_matrix: list[list[float]] = []
     s_matrix: list[list[float]] = []
     for u in units:
         c_row, b_row, o_row, p_row, s_row = [], [], [], [], []
@@ -169,8 +170,10 @@ def _build_payload(
                 service_cells[sid]["discount"][j] * service_cells[sid]["price"][j]
                 for sid in u["service_ids"]
             )
+            # p is a monetary value and may be fractional — sum the raw float so
+            # the solver sees the SAME p as compute_provider_metrics (no int()).
             p_unit = sum(
-                int(service_cells[sid]["provider_revenue"][j]) for sid in u["service_ids"]
+                service_cells[sid]["provider_revenue"][j] for sid in u["service_ids"]
             )
             s_unit = max(
                 (service_cells[sid]["min_value"][j] for sid in u["service_ids"]),
