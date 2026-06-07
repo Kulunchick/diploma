@@ -6,13 +6,22 @@ flow consumes and runs it through SingleAlgorithmWorkflow (one algorithm +
 write-back). Provider revenue p_ij and service groups are persisted elsewhere
 but are NOT part of the solver input in this iteration.
 """
+import asyncio
 import csv
 import io
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +29,7 @@ from sqlalchemy.orm import selectinload
 from temporalio.client import Client, WorkflowExecutionStatus
 from temporalio.service import RPCError
 
-from src.operations.db.base import get_session
+from src.operations.db.base import AsyncSessionLocal, get_session
 from src.operations.db.models import (
     FormationAssignment,
     FormationIteration,
@@ -50,7 +59,7 @@ from src.operations.models.formation import (
     FormationTotals,
 )
 from src.operations.routers.deps import get_redis, get_temporal_client
-from src.operations.security import get_current_user
+from src.operations.security import decode_token, get_current_user
 from src.operations.temporal_types import (
     COMBINED_FORMATION_WORKFLOW_NAME,
     SINGLE_ALGORITHM_WORKFLOW_NAME,
@@ -619,6 +628,117 @@ async def get_iterations(
         FormationIterationRead(iteration=it, best_value=bv)
         for it, bv in sorted(by_iter.items())
     ]
+
+
+@router.websocket("/{scenario_id}/ws")
+async def iterations_ws(websocket: WebSocket, scenario_id: uuid.UUID) -> None:
+    """Live convergence stream over WebSocket.
+
+    Authenticates via a ``?token=`` query parameter, because a browser cannot
+    set an Authorization header on the WebSocket handshake. The handler replays
+    the iterations already buffered in the Redis stream, then tails it for new
+    ones, and sends a final ``{"type": "complete"}`` once the scenario reaches a
+    terminal state — at which point the full history is durable in Postgres and
+    available via ``GET /iterations``.
+
+    Message protocol (server → client, JSON text frames):
+      {"type": "iteration", "iteration": int, "best_value": float}
+      {"type": "complete"}
+    """
+    await websocket.accept()
+    token = websocket.query_params.get("token")
+    user_id = decode_token(token) if token else None
+    if user_id is None:
+        await websocket.close(code=1008)  # policy violation
+        return
+
+    redis: Redis = websocket.app.state.redis
+
+    async def send_iteration(payload: dict) -> None:
+        if payload.get("type") == "iteration":
+            await websocket.send_json({
+                "type": "iteration",
+                "iteration": int(payload["iteration"]),
+                "best_value": float(payload["current_best_value"]),
+            })
+
+    async with AsyncSessionLocal() as session:
+        scenario = (
+            await session.execute(
+                select(FormationScenario).where(
+                    FormationScenario.id == scenario_id,
+                    FormationScenario.owner_id == user_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if scenario is None:
+            await websocket.close(code=1008)
+            return
+
+        channel = f"formation:{scenario.workflow_id}" if scenario.workflow_id else None
+
+        try:
+            # Already finished: stream the persisted history once, then done.
+            if scenario.status in ("completed", "failed") or channel is None:
+                rows = await session.execute(
+                    select(FormationIteration.iteration, FormationIteration.best_value)
+                    .where(FormationIteration.scenario_id == scenario.id)
+                    .order_by(FormationIteration.iteration)
+                )
+                for it, bv in rows.all():
+                    await websocket.send_json(
+                        {"type": "iteration", "iteration": it, "best_value": bv}
+                    )
+                await websocket.send_json({"type": "complete"})
+                return
+
+            # Running: replay what's buffered, then tail the stream live.
+            last_id = "0"
+            try:
+                entries = await redis.xrange(channel, min="-", max="+")
+            except Exception:
+                entries = []
+            for entry_id, fields in entries:
+                last_id = entry_id
+                try:
+                    await send_iteration(json.loads(fields["data"]))
+                except (KeyError, ValueError):
+                    continue
+
+            while True:
+                try:
+                    resp = await redis.xread({channel: last_id}, block=1000, count=500)
+                except Exception:
+                    resp = None
+                if resp:
+                    for _stream, msgs in resp:
+                        for entry_id, fields in msgs:
+                            last_id = entry_id
+                            try:
+                                await send_iteration(json.loads(fields["data"]))
+                            except (KeyError, ValueError):
+                                continue
+
+                # The persist activity flips status from another process; a fresh
+                # scalar read under READ COMMITTED sees its committed value.
+                status_val = (
+                    await session.execute(
+                        select(FormationScenario.status).where(
+                            FormationScenario.id == scenario.id
+                        )
+                    )
+                ).scalar_one_or_none()
+                await session.commit()  # end the txn so the next poll re-reads
+                if status_val in ("completed", "failed"):
+                    await websocket.send_json({"type": "complete"})
+                    return
+        except WebSocketDisconnect:
+            return
+        finally:
+            try:
+                await websocket.close()
+            except Exception:
+                pass
 
 
 @router.get("/{scenario_id}/export.json")

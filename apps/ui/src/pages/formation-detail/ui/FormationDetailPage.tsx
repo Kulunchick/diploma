@@ -10,6 +10,7 @@ import { AssignmentsTable } from '@widgets/assignments-table';
 import { IterationChart, ALGO_COLOR } from '@widgets/convergence-chart';
 import { FormationTotalsCards } from '@widgets/formation-totals-cards';
 import { CompareScenarioDialog } from '@features/formation-compare-launch';
+import { useIterationStream } from '@features/formation-stream';
 import { useFormation, useFormationIterations, StatusBadge } from '@entities/formation';
 import { useExport } from '@features/formation-export';
 
@@ -21,10 +22,15 @@ const COMBINED_SOURCE_LABEL: Record<string, string> = {
 export default function FormationDetailPage() {
   const { id = '' } = useParams();
   const { data, isLoading } = useFormation(id);
-  const { data: iterations = [] } = useFormationIterations(
+  const isRunning = !!data && (data.status === 'pending' || data.status === 'running');
+  // Live convergence over WebSocket while running; persisted history once done.
+  const liveIterations = useIterationStream(id, isRunning);
+  const { data: persistedIterations = [] } = useFormationIterations(
     id,
     !!data && (data.status === 'completed' || data.status === 'failed'),
   );
+  const iterations =
+    persistedIterations.length > 0 ? persistedIterations : liveIterations;
   const { exportJson, exportCsv } = useExport(id);
 
   const handleExport = async (kind: 'json' | 'csv') => {
