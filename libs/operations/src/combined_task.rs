@@ -20,8 +20,9 @@ pub struct CombinedTask {
     pub c: Array2<i64>,
     /// Обсяг ресурсу IT-компанії β_ij для пари «одиниця–провайдер».
     pub b_ij: Array2<i64>,
-    /// Дохід провайдера p_ij від надання сервісу своїм клієнтам.
-    pub p_ij: Array2<i64>,
+    /// Дохід провайдера p_ij від надання сервісу своїм клієнтам (грошова
+    /// величина — може бути дробовою, на відміну від ціни/ресурсу).
+    pub p_ij: Array2<f64>,
     /// Верхня межа знижки r_max_ij ∈ [0, 1) для кожної пари.
     pub omega_max: Array2<f64>,
     /// Пороги відносної цінності s_ij ≥ 0 (обмеження (4)).
@@ -38,7 +39,7 @@ impl CombinedTask {
         n: usize,
         c: PyReadonlyArray2<i64>,
         b_ij: PyReadonlyArray2<i64>,
-        p_ij: PyReadonlyArray2<i64>,
+        p_ij: PyReadonlyArray2<f64>,
         omega_max: PyReadonlyArray2<f64>,
         s_ij: PyReadonlyArray2<f64>,
         b_total: i64,

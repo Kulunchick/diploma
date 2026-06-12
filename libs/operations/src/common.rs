@@ -126,10 +126,10 @@ pub fn weighted_objective(v: &Array2<i64>, value: &Array2<i64>, r: &Array2<f64>)
 /// ЗАРОБЛЯЄ на клієнтах (p). Це дві різні транзакції в ланцюзі цінності, тож
 /// знижка IT-компанії не зменшує клієнтський дохід провайдера. Уточнення
 /// формули (2) статті (там Σ(1−r)·p·v) — задокументовано в docs/combined-method.md.
-pub fn provider_objective(v: &Array2<i64>, p: &Array2<i64>) -> f64 {
+pub fn provider_objective(v: &Array2<i64>, p: &Array2<f64>) -> f64 {
     Zip::from(v).and(p).fold(0.0, |acc, &v_val, &p_val| {
         if v_val == 1 {
-            acc + p_val as f64
+            acc + p_val
         } else {
             acc
         }
@@ -145,6 +145,6 @@ pub fn provider_objective(v: &Array2<i64>, p: &Array2<i64>) -> f64 {
 /// «дохід провайдера p має бути щонайменше у s разів більший за те, що він
 /// заплатив IT-компанії, (1−r)·d». s = 0 → завжди допустимо. Множникова форма
 /// коректно обробляє d = 0 (безкоштовний сервіс): 0 ≤ p — істина.
-pub fn is_admissible(s: f64, r: f64, d: i64, p: i64) -> bool {
-    s * (1.0 - r) * d as f64 <= p as f64
+pub fn is_admissible(s: f64, r: f64, d: i64, p: f64) -> bool {
+    s * (1.0 - r) * d as f64 <= p
 }

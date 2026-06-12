@@ -1,6 +1,0 @@
-image:
-  tag: 8b9af1be
-
-ingress:
-  # REQUIRED — your production domain. Example: "app.example.com"
-  host: ""

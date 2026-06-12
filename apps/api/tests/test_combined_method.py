@@ -42,7 +42,7 @@ from assignment_solver import (  # noqa: E402
 
 # --- concession-demonstrating fixture (4 units × 2 providers) ---------------
 C = np.array([[1000, 1000], [300, 300], [700, 700], [250, 250]], dtype=np.int64)
-P = np.array([[560, 560], [950, 950], [700, 700], [1000, 1000]], dtype=np.int64)
+P = np.array([[560, 560], [950, 950], [700, 700], [1000, 1000]], dtype=np.float64)
 B = np.array([[500, 500], [500, 500], [500, 500], [500, 500]], dtype=np.int64)
 S = np.array([[0.70, 0.70], [0.30, 0.30], [0.50, 0.50], [0.30, 0.30]])
 R_MAX = 0.30
@@ -177,7 +177,7 @@ def _admis_task(s_unit0: float) -> CombinedTask:
     (s·(1−r)·d = s·100 > 10). Unit 1 is always admissible (s=0). Both fit T."""
     c = np.array([[100], [10]], dtype=np.int64)
     b = np.array([[5], [5]], dtype=np.int64)
-    p = np.array([[10], [100]], dtype=np.int64)
+    p = np.array([[10], [100]], dtype=np.float64)
     om = np.array([[0.0], [0.0]])
     s = np.array([[s_unit0], [0.0]])
     return CombinedTask(2, 1, c, b, p, om, s, 10)
@@ -246,7 +246,7 @@ async def _run_combined(wf_input):
         wf_input.m, wf_input.n,
         np.array(wf_input.c, dtype=np.int64),
         np.array(wf_input.b_ij, dtype=np.int64),
-        np.array(wf_input.p_ij, dtype=np.int64),
+        np.array(wf_input.p_ij, dtype=np.float64),
         np.array(wf_input.omega_max, dtype=np.float64),
         np.array(wf_input.s_ij, dtype=np.float64),
         int(wf_input.b_total),

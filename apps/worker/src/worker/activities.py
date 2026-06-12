@@ -50,9 +50,9 @@ async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
     # s = 0 → every pair admissible (identical to the pre-(4) behaviour).
     m, n = input.m, input.n
     p_ij = (
-        np.array(input.p_ij, dtype=np.int64)
+        np.array(input.p_ij, dtype=np.float64)
         if input.p_ij is not None
-        else np.zeros((m, n), dtype=np.int64)
+        else np.zeros((m, n), dtype=np.float64)
     )
     s_ij = (
         np.array(input.s_ij, dtype=np.float64)
@@ -86,27 +86,27 @@ async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
     else:
         raise ValueError(f"Unknown algorithm: {input.algorithm!r}")
 
-    if input.redis_channel:
-        redis = _redis
-        channel = input.redis_channel
-        algo = input.algorithm
+    # Convergence points buffered in-thread (callback only appends — Redis-free,
+    # non-blocking, race-free). A background flusher streams them to Redis live.
+    iteration_history: list[tuple[int, float]] = []
 
+    if input.redis_channel:
         def iteration_callback(data: dict) -> None:
             asyncio.run_coroutine_threadsafe(_async_heartbeat(data), loop)
-            if redis:
-                # XADD instead of PUBLISH so late WS subscribers can replay
-                # iterations from the start. maxlen caps memory growth.
-                asyncio.run_coroutine_threadsafe(
-                    redis.xadd(
-                        channel,
-                        {"data": json.dumps({"type": "iteration", "algorithm": algo, **data})},
-                        maxlen=5000,
-                        approximate=True,
-                    ),
-                    loop,
-                )
+            iteration_history.append(
+                (int(data["iteration"]), float(data["current_best_value"]))
+            )
 
         solver.set_iteration_callback(iteration_callback)
+
+    stop_flush = asyncio.Event()
+    flusher_task: Optional[asyncio.Task] = (
+        asyncio.create_task(
+            _live_flush_loop(input.redis_channel, input.algorithm, iteration_history, stop_flush)
+        )
+        if input.redis_channel
+        else None
+    )
 
     start = time.perf_counter()
     executor_task = asyncio.ensure_future(
@@ -123,6 +123,11 @@ async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
         if executor_task in done:
             solution, value = executor_task.result()
             elapsed = time.perf_counter() - start
+            # Solve done → stop the live flusher; it performs a final drain so the
+            # stream holds the COMPLETE history before the persist activity reads.
+            if flusher_task is not None:
+                stop_flush.set()
+                await flusher_task
         else:
             exc = (
                 heartbeat_task.exception()
@@ -140,6 +145,11 @@ async def _run_algorithm_core(input: RunAlgorithmInput) -> RunResult:
     finally:
         heartbeat_task.cancel()
         await asyncio.gather(heartbeat_task, return_exceptions=True)
+        # Failure paths: tear down the flusher without a final drain (no curve
+        # needed for a failed run). On success it is already awaited above.
+        if flusher_task is not None and not flusher_task.done():
+            flusher_task.cancel()
+            await asyncio.gather(flusher_task, return_exceptions=True)
 
     return RunResult(
         variant_key=input.variant_key,
@@ -163,7 +173,7 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
         input.n,
         np.array(input.c, dtype=np.int64),
         np.array(input.b_ij, dtype=np.int64),
-        np.array(input.p_ij, dtype=np.int64),
+        np.array(input.p_ij, dtype=np.float64),
         np.array(input.omega_max, dtype=np.float64),
         np.array(input.s_ij, dtype=np.float64),
         int(input.b_total),
@@ -175,24 +185,27 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
         local_search_restarts=input.params.local_search_restarts,
     )
 
-    if input.redis_channel:
-        redis = _redis
-        channel = input.redis_channel
+    # See _run_algorithm_core: callback only appends; a background flusher streams
+    # the buffer to Redis live, with a final drain after solve for completeness.
+    iteration_history: list[tuple[int, float]] = []
 
+    if input.redis_channel:
         def iteration_callback(data: dict) -> None:
             asyncio.run_coroutine_threadsafe(_async_heartbeat(data), loop)
-            if redis:
-                asyncio.run_coroutine_threadsafe(
-                    redis.xadd(
-                        channel,
-                        {"data": json.dumps({"type": "iteration", "algorithm": "combined", **data})},
-                        maxlen=5000,
-                        approximate=True,
-                    ),
-                    loop,
-                )
+            iteration_history.append(
+                (int(data["iteration"]), float(data["current_best_value"]))
+            )
 
         solver.set_iteration_callback(iteration_callback)
+
+    stop_flush = asyncio.Event()
+    flusher_task: Optional[asyncio.Task] = (
+        asyncio.create_task(
+            _live_flush_loop(input.redis_channel, "combined", iteration_history, stop_flush)
+        )
+        if input.redis_channel
+        else None
+    )
 
     executor_task = asyncio.ensure_future(
         loop.run_in_executor(None, solver.solve, rust_task)
@@ -206,6 +219,9 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
         )
         if executor_task in done:
             result = executor_task.result()
+            if flusher_task is not None:
+                stop_flush.set()
+                await flusher_task
         else:
             exc = (
                 heartbeat_task.exception()
@@ -222,6 +238,9 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
     finally:
         heartbeat_task.cancel()
         await asyncio.gather(heartbeat_task, return_exceptions=True)
+        if flusher_task is not None and not flusher_task.done():
+            flusher_task.cancel()
+            await asyncio.gather(flusher_task, return_exceptions=True)
 
     # CombinedSolver.solve returns a dict of numpy arrays + floats + str.
     return CombinedResult(
@@ -236,6 +255,77 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
 def _maybe_json(value):
     """JSONB columns come back as str from asyncpg over a raw text() query."""
     return json.loads(value) if isinstance(value, str) else value
+
+
+async def _xadd_iteration_batch(
+    channel: Optional[str], algorithm: str, points: list[tuple[int, float]]
+) -> None:
+    """Write a batch of convergence points to the Redis stream in ONE pipeline.
+
+    The solver fires its callback from a worker thread; it only appends to a
+    plain list (thread-safe under the GIL). Writes to Redis are funnelled through
+    this single batched call so they never run concurrently on the shared
+    connection — scheduling one fire-and-forget ``xadd`` per iteration drives many
+    concurrent writes that mostly error out and are silently lost (observed: only
+    ~100 of N landing, sometimes 0). maxlen is generous (50000 ≫ any realistic
+    run, incl. combined-method restarts) so the cap never silently truncates."""
+    if not channel or _redis is None or not points:
+        return
+    # Sub-batch each flush so a single pipeline never grows unbounded (a flush
+    # that accumulated hundreds of thousands of points would otherwise time out
+    # the connection). Each chunk is one awaited pipeline — still a single
+    # serialised writer, so no concurrent-connection race.
+    CHUNK = 5000
+    for base in range(0, len(points), CHUNK):
+        pipe = _redis.pipeline()
+        for iteration, value in points[base:base + CHUNK]:
+            pipe.xadd(
+                channel,
+                {"data": json.dumps(
+                    {"type": "iteration", "algorithm": algorithm,
+                     "iteration": iteration, "current_best_value": value}
+                )},
+                maxlen=50000,
+                approximate=True,
+            )
+        await pipe.execute()
+
+
+async def _live_flush_loop(
+    channel: Optional[str],
+    algorithm: str,
+    history: list[tuple[int, float]],
+    stop_event: asyncio.Event,
+) -> None:
+    """Single-writer flusher: drain newly-buffered convergence points to Redis in
+    batched pipelines at a bounded cadence, so the chart fills progressively
+    while the solver runs — then a final guaranteed drain once stopped.
+
+    One writer task → writes are inherently serialised → no concurrent-connection
+    race. The solver thread only appends to ``history`` (never touches Redis), so
+    it is never throttled on Redis round-trips. A ``flushed`` index makes every
+    point reach the stream exactly once; the flush cadence changes only WHEN
+    points appear, never WHICH points or their order, so the final persisted
+    curve is identical to a single batch flush."""
+    if not channel or _redis is None:
+        return
+    flushed = 0
+    while True:
+        n = len(history)  # atomic read; appends happen on the solver thread
+        if n > flushed:
+            await _xadd_iteration_batch(channel, algorithm, history[flushed:n])
+            flushed = n
+        if stop_event.is_set():
+            # Solve has finished before stop is set, so history is now final —
+            # re-read to drain any tail appended since the snapshot above.
+            n = len(history)
+            if n > flushed:
+                await _xadd_iteration_batch(channel, algorithm, history[flushed:n])
+            return
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=0.3)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def _read_iteration_history(channel: Optional[str]) -> list[tuple[int, float]]:

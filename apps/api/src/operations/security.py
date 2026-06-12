@@ -43,6 +43,23 @@ def create_access_token(user_id: uuid.UUID) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
 
 
+def decode_token(token: str) -> uuid.UUID | None:
+    """Decode a JWT into its subject user id, or None if invalid/expired.
+
+    Shared by the HTTP dependency (``get_current_user``) and the WebSocket
+    handler, which authenticates via a query-string token because browsers
+    cannot set an Authorization header on a WebSocket handshake.
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        sub = payload.get("sub")
+        if sub is None:
+            return None
+        return uuid.UUID(sub)
+    except (JWTError, ValueError):
+        return None
+
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: AsyncSession = Depends(get_session),
@@ -52,13 +69,8 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-        sub = payload.get("sub")
-        if sub is None:
-            raise credentials_error
-        user_id = uuid.UUID(sub)
-    except (JWTError, ValueError):
+    user_id = decode_token(token)
+    if user_id is None:
         raise credentials_error
 
     user = await session.get(User, user_id)

@@ -26,7 +26,7 @@ class RunAlgorithmInput(BaseModel):
     # Constraint (4) inputs (provider revenue p_ij + relative-value thresholds
     # s_ij). Optional for back-compat: when omitted both default to zeros, so
     # s = 0 → every pair admissible (behaviour identical to pre-(4)).
-    p_ij: Optional[list[list[int]]] = None
+    p_ij: Optional[list[list[float]]] = None
     s_ij: Optional[list[list[float]]] = None
 
 
