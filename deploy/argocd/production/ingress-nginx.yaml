@@ -40,6 +40,19 @@ spec:
                   app.kubernetes.io/name: ingress-nginx
                   app.kubernetes.io/instance: ingress-nginx
                   app.kubernetes.io/component: controller
+          # Relaxed probes: node CPU starvation on this spot cluster makes the
+          # controller healthz slow to answer; the default 1s timeout was
+          # failing the liveness probe and killing the pod in a restart loop.
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 10
+          readinessProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
           image:
             registry: quay.io/cloudfleet
             image: ingress-nginx-controller
