@@ -14,7 +14,7 @@ spec:
       helm:
         valueFiles:
           - $values/deploy/values-production/temporal.yaml
-    - repoURL: https://github.com/Kulunchick/diploma
+    - repoURL: https://github.com/Kulunchick/diploma-values
       targetRevision: main
       ref: values
   destination:

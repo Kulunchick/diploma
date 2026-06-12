@@ -35,8 +35,8 @@ spec:
             # $values resolves to the root of the second source below
             valueFiles:
               - $values/deploy/values-production/{{chart}}.yaml
-        # Secondary: repo root used only as a values file source
-        - repoURL: https://github.com/Kulunchick/diploma
+        # Secondary: private config repo used only as a values file source
+        - repoURL: https://github.com/Kulunchick/diploma-values
           targetRevision: main
           ref: values
       destination:

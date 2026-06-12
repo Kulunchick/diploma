@@ -44,9 +44,17 @@ Thumbs.db
 # Word documents in docs/ (thesis drafts — tracked separately)
 docs/*.docx
 
+# Secrets — repo-credential manifests carry a real PAT, never commit
+*.secret.yaml
+
 # Environment
 .env
 .env.*
 !.env.example
 .mcp.json
 .claude
+.terraform
+.terraform.lock.hcl
+*.tfstate*
+deploy/terraform/terraform.exe
+docs
