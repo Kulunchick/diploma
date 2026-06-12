@@ -292,25 +292,25 @@ jobs:
       - name: Bump frontend image.tag
         if: needs.changes.outputs.frontend == 'true'
         run: |
-          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+          sed -i "s/^  tag: .*$/  tag: \"${{ steps.sha.outputs.tag }}\"/" \
             deploy/values-local/frontend.yaml
-          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+          sed -i "s/^  tag: .*$/  tag: \"${{ steps.sha.outputs.tag }}\"/" \
             values-repo/deploy/values-production/frontend.yaml
 
       - name: Bump backend image.tag
         if: needs.changes.outputs.backend == 'true'
         run: |
-          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+          sed -i "s/^  tag: .*$/  tag: \"${{ steps.sha.outputs.tag }}\"/" \
             deploy/values-local/backend.yaml
-          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+          sed -i "s/^  tag: .*$/  tag: \"${{ steps.sha.outputs.tag }}\"/" \
             values-repo/deploy/values-production/backend.yaml
 
       - name: Bump worker image.tag
         if: needs.changes.outputs.worker == 'true'
         run: |
-          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+          sed -i "s/^  tag: .*$/  tag: \"${{ steps.sha.outputs.tag }}\"/" \
             deploy/values-local/worker.yaml
-          sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
+          sed -i "s/^  tag: .*$/  tag: \"${{ steps.sha.outputs.tag }}\"/" \
             values-repo/deploy/values-production/worker.yaml
 
       - name: Commit → rebase → push (diploma) [skip ci]
