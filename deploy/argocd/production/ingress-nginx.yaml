@@ -26,6 +26,20 @@ spec:
       values: |
         controller:
           watchIngressWithoutClass: true
+          # HA: 2 replicas spread across nodes + PDB, so this spot cluster's
+          # node churn doesn't leave the NLB (externalTrafficPolicy: Local)
+          # without a healthy target.
+          replicaCount: 2
+          minAvailable: 1
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: ingress-nginx
+                  app.kubernetes.io/instance: ingress-nginx
+                  app.kubernetes.io/component: controller
           image:
             registry: quay.io/cloudfleet
             image: ingress-nginx-controller
