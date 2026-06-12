@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx
+  namespace: argocd
+  annotations:
+    # Up before the app workloads (wave 1) that expose Ingresses, and so the
+    # ACME http01 solver has a controller to route challenges through.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    chart: ingress-nginx
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    # Pinned to 4.9.x: CFKE's quay.io/cloudfleet mirror only carries the
+    # controller image up to v1.9.6 (chart 4.9.1 -> controller v1.9.6).
+    targetRevision: 4.9.1
+    helm:
+      # CFKE-specific values (per Cloudfleet's nginx-ingress + cert-manager tutorial):
+      #  - quay.io/cloudfleet image mirror for reliability
+      #  - externalTrafficPolicy: Local to avoid extra cross-cloud network hops
+      #  - watchIngressWithoutClass so unclassed Ingresses are still served
+      values: |
+        global:
+          image:
+            registry: quay.io/cloudfleet
+        controller:
+          watchIngressWithoutClass: true
+          image:
+            image: ingress-nginx-controller
+          admissionWebhooks:
+            patch:
+              image:
+                image: kube-webhook-certgen
+          service:
+            externalTrafficPolicy: Local
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
