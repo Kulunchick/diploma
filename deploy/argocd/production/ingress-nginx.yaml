@@ -20,18 +20,22 @@ spec:
       #  - quay.io/cloudfleet image mirror for reliability
       #  - externalTrafficPolicy: Local to avoid extra cross-cloud network hops
       #  - watchIngressWithoutClass so unclassed Ingresses are still served
+      # NOTE: registry must be set per-image (chart 4.9.x ignores global.image.registry),
+      # and digests are cleared because the mirror re-pushes images under flattened
+      # names with different digests — so images are pulled by tag.
       values: |
-        global:
-          image:
-            registry: quay.io/cloudfleet
         controller:
           watchIngressWithoutClass: true
           image:
+            registry: quay.io/cloudfleet
             image: ingress-nginx-controller
+            digest: ""
           admissionWebhooks:
             patch:
               image:
+                registry: quay.io/cloudfleet
                 image: kube-webhook-certgen
+                digest: ""
           service:
             externalTrafficPolicy: Local
   destination:
