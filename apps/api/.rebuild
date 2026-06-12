@@ -1,0 +1,3 @@
+# Marker to force the CD backend pipeline to rebuild + write back the image tag.
+# Touched 2026-06-12 to publish the auth-enabled backend and verify the
+# diploma-values write-back now works (VALUES_REPO_TOKEN added).

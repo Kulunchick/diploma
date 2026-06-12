@@ -262,6 +262,7 @@ jobs:
       needs.changes.outputs.worker   == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Checkout this repo (diploma-code) — holds values-local/*.yaml.
       - uses: actions/checkout@v4
         with:
           # Pushes made with GITHUB_TOKEN do NOT re-trigger workflows.
@@ -270,20 +271,31 @@ jobs:
           # Fetch full history so rebase has enough context.
           fetch-depth: 0
 
+      # Checkout diploma-values into ./values-repo — holds values-production/*.yaml.
+      # Requires a PAT (or GitHub App token) with `contents:write` on diploma-values,
+      # stored as the VALUES_REPO_TOKEN secret. GITHUB_TOKEN cannot push cross-repo.
+      - name: Checkout diploma-values
+        uses: actions/checkout@v4
+        with:
+          repository: Kulunchick/diploma-values
+          token: ${{ secrets.VALUES_REPO_TOKEN }}
+          path: values-repo
+          fetch-depth: 0
+
       - name: Compute immutable SHA tag
         id: sha
         run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
       # Update image.tag in BOTH env files for each changed component.
       # sed targets the line "  tag: <anything>" (2-space indent under image:).
-      # Each values-{env}/<comp>.yaml has exactly one such line.
+      # values-local lives here; values-production lives in ./values-repo.
       - name: Bump frontend image.tag
         if: needs.changes.outputs.frontend == 'true'
         run: |
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
             deploy/values-local/frontend.yaml
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
-            deploy/values-production/frontend.yaml
+            values-repo/deploy/values-production/frontend.yaml
 
       - name: Bump backend image.tag
         if: needs.changes.outputs.backend == 'true'
@@ -291,7 +303,7 @@ jobs:
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
             deploy/values-local/backend.yaml
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
-            deploy/values-production/backend.yaml
+            values-repo/deploy/values-production/backend.yaml
 
       - name: Bump worker image.tag
         if: needs.changes.outputs.worker == 'true'
@@ -299,24 +311,26 @@ jobs:
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
             deploy/values-local/worker.yaml
           sed -i "s/^  tag: .*$/  tag: ${{ steps.sha.outputs.tag }}/" \
-            deploy/values-production/worker.yaml
+            values-repo/deploy/values-production/worker.yaml
 
-      - name: Commit → rebase → push [skip ci]
+      - name: Commit → rebase → push (diploma) [skip ci]
+        # Dev-only values-local bump. If this push is blocked (branch
+        # protection on GITHUB_TOKEN, transient conflict), it must NOT abort
+        # the job — the production write-back to diploma-values below is what
+        # actually drives the deploy and has to run regardless.
+        continue-on-error: true
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add deploy/values-local/frontend.yaml \
                   deploy/values-local/backend.yaml  \
-                  deploy/values-local/worker.yaml   \
-                  deploy/values-production/frontend.yaml \
-                  deploy/values-production/backend.yaml  \
-                  deploy/values-production/worker.yaml
+                  deploy/values-local/worker.yaml
 
           # Nothing to commit if all components were unchanged (shouldn't
           # happen given the job's if-condition, but guard anyway).
           if git diff --cached --quiet; then
-            echo "No values.yaml changes — nothing to commit."
+            echo "No values-local changes — nothing to commit."
             exit 0
           fi
 
@@ -326,6 +340,26 @@ jobs:
           # during the build phase (manual push, hotfix, etc.).
           git pull --rebase origin main
 
+          git push origin main
+
+      - name: Commit → rebase → push (diploma-values)
+        working-directory: values-repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add deploy/values-production/frontend.yaml \
+                  deploy/values-production/backend.yaml  \
+                  deploy/values-production/worker.yaml
+
+          if git diff --cached --quiet; then
+            echo "No values-production changes — nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(cd): bump image tags to ${{ steps.sha.outputs.tag }}"
+
+          git pull --rebase origin main
           git push origin main
 
       - name: Write-back summary
