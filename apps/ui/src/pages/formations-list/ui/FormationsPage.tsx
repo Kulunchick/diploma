@@ -90,7 +90,7 @@ export default function FormationsPage() {
   const [algorithm, setAlgorithm] = useState<FormationAlgorithm>('probabilistic');
   const [ant, setAnt] = useState({ Kmax: 100, num_ants: 20, alpha: 1, beta: 2, p: 0.1, tau: 1 });
   const [prob, setProb] = useState({ Kmax: 100 });
-  const [combined, setCombined] = useState({ kmax_subproblem: 300, discount_step: 0.05, ignore_discounts: false, local_search_restarts: 6 });
+  const [combined, setCombined] = useState({ kmax_subproblem: 300, discount_step: 0.05, ignore_discounts: false, local_search_restarts: 6, subtask_solver: 'probabilistic' });
 
   // All param values must be within bounds before the form can be submitted.
   const paramsValid = useMemo(() => {
@@ -115,7 +115,7 @@ export default function FormationsPage() {
     return true;
   }, [algorithm, bTotal, prob, ant, combined]);
 
-  const paramsFor = (algo: FormationAlgorithm): Record<string, number | boolean> => {
+  const paramsFor = (algo: FormationAlgorithm): Record<string, number | boolean | string> => {
     if (algo === 'ant_colony') return { ...ant };
     if (algo === 'combined') return { ...combined };
     return { Kmax: prob.Kmax };
@@ -215,6 +215,17 @@ export default function FormationsPage() {
 
             {algorithm === 'combined' && (
               <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs text-muted-foreground">Розв'язувач підзадач</Label>
+                  <select
+                    value={combined.subtask_solver}
+                    onChange={(e) => setCombined({ ...combined, subtask_solver: e.target.value })}
+                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="probabilistic">ймовірнісно-жадібний</option>
+                    <option value="ant_colony">мурашині колонії</option>
+                  </select>
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <NumberField label="K_max підзадач"   value={combined.kmax_subproblem}
                     min={BOUNDS.comb_kmax.min}

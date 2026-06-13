@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -26,6 +28,9 @@ class CombinedParameters(BaseModel):
     discount_step: float = Field(default=0.05, gt=0, le=0.5)
     ignore_discounts: bool = False
     local_search_restarts: int = Field(default=6, ge=0)
+    # Solver for BOTH Stage-1 subtasks: "probabilistic" (documented default) or
+    # "ant_colony" (stronger start → wins at all T, incl. large resource budgets).
+    subtask_solver: Literal["probabilistic", "ant_colony"] = "probabilistic"
 
 
 class AlgorithmParameters(BaseModel):

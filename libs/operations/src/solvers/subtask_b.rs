@@ -20,7 +20,8 @@ use crate::common::provider_objective;
 
 /// θ_ij = p_ij / β_ij (0, якщо β_ij = 0). Дохід провайдера на одиницю ресурсу;
 /// знижка IT-компанії у чисельник не входить (p — клієнтський дохід провайдера).
-fn provider_heuristic(task: &CombinedTask) -> Array2<f64> {
+/// pub(crate): перевикористовується алгоритмом мурашиних колоній для підзадачі Б.
+pub(crate) fn provider_heuristic(task: &CombinedTask) -> Array2<f64> {
     Array2::from_shape_fn((task.m, task.n), |(i, j)| {
         let b = task.b_ij[[i, j]];
         if b != 0 {

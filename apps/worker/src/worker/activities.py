@@ -183,6 +183,7 @@ async def run_combined_method_activity(input: CombinedSolveInput) -> CombinedRes
         kmax_subproblem=input.params.kmax_subproblem,
         discount_step=input.params.discount_step,
         local_search_restarts=input.params.local_search_restarts,
+        subtask_solver=input.params.subtask_solver,
     )
 
     # See _run_algorithm_core: callback only appends; a background flusher streams

@@ -72,6 +72,9 @@ class CombinedParams(BaseModel):
     kmax_subproblem: int = 100
     discount_step: float = 0.05
     local_search_restarts: int = 0
+    # Which solver runs BOTH Stage-1 subtasks (A and B): "probabilistic" (the
+    # documented default) or "ant_colony" (stronger start, wins at all T).
+    subtask_solver: str = "probabilistic"
 
 
 class CombinedSolveInput(BaseModel):

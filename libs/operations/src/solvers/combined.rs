@@ -19,8 +19,29 @@ use pyo3::{prelude::*, types::PyDict};
 
 use crate::combined_task::CombinedTask;
 use crate::common::{provider_objective, weighted_objective};
+use crate::solvers::ant_colony::{ant_colony_subtask_a, ant_colony_subtask_b};
 use crate::solvers::subtask_a::solve_subtask_a;
 use crate::solvers::subtask_b::solve_subtask_b;
+
+/// Який розв'язувач застосувати до ОБОХ однокритеріальних підзадач Стадії 1.
+/// За замовчуванням — ймовірнісно-жадібний (саме його описано у статті/ПЗ).
+/// Мурашині колонії дають сильніший стартовий розв'язок; оскільки опускання
+/// знижок на Стадії 3 — завжди Парето-крок (F_IT↑, F_prov незмінний), кращий
+/// старт гарантує сумарну вигоду не нижчу за найкращий однокритеріальний метод.
+#[derive(Clone, Copy)]
+enum SubtaskSolver {
+    Probabilistic,
+    AntColony,
+}
+
+impl SubtaskSolver {
+    fn parse(s: &str) -> Self {
+        match s {
+            "ant_colony" => SubtaskSolver::AntColony,
+            _ => SubtaskSolver::Probabilistic,
+        }
+    }
+}
 
 /// Епсилон прийняття ходу. Guard проти float-cycling: знижки змінюються кроком
 /// discount_step, тож суто арифметичні «покращення» близько нуля
@@ -47,18 +68,25 @@ pub struct CombinedSolver {
     kmax_subproblem: usize,
     discount_step: f64,
     local_search_restarts: usize,
+    subtask_solver: SubtaskSolver,
     iteration_callback: Option<PyObject>,
 }
 
 #[pymethods]
 impl CombinedSolver {
     #[new]
-    #[pyo3(signature = (kmax_subproblem = 100, discount_step = 0.05, local_search_restarts = 0))]
-    pub fn new(kmax_subproblem: usize, discount_step: f64, local_search_restarts: usize) -> Self {
+    #[pyo3(signature = (kmax_subproblem = 100, discount_step = 0.05, local_search_restarts = 0, subtask_solver = None))]
+    pub fn new(
+        kmax_subproblem: usize,
+        discount_step: f64,
+        local_search_restarts: usize,
+        subtask_solver: Option<String>,
+    ) -> Self {
         CombinedSolver {
             kmax_subproblem,
             discount_step,
             local_search_restarts,
+            subtask_solver: SubtaskSolver::parse(subtask_solver.as_deref().unwrap_or("probabilistic")),
             iteration_callback: None,
         }
     }
@@ -119,8 +147,23 @@ impl CombinedSolver {
         let mut ticks: Vec<f64> = Vec::new();
 
         // --- Стадія 1: однокритеріальні підзадачі при r = r_max ---
-        let (v_a, f_it_a) = solve_subtask_a(task, self.kmax_subproblem);
-        let (v_b, f_prov_b) = solve_subtask_b(task, self.kmax_subproblem);
+        // Обидві підзадачі розв'язує ОДИН обраний користувачем алгоритм
+        // (default — ймовірнісно-жадібний). АМК дає сильніший старт при великому T.
+        let (v_a, f_it_a, v_b, f_prov_b) = match self.subtask_solver {
+            SubtaskSolver::Probabilistic => {
+                let (va, fa) = solve_subtask_a(task, self.kmax_subproblem);
+                let (vb, fb) = solve_subtask_b(task, self.kmax_subproblem);
+                (va, fa, vb, fb)
+            }
+            SubtaskSolver::AntColony => {
+                // Стандартні параметри АМК; K_max = kmax_subproblem (як у greedy).
+                let (va, fa) =
+                    ant_colony_subtask_a(task, 20, self.kmax_subproblem, 1.0, 2.0, 0.1, 1.0);
+                let (vb, fb) =
+                    ant_colony_subtask_b(task, 20, self.kmax_subproblem, 1.0, 2.0, 0.1, 1.0);
+                (va, fa, vb, fb)
+            }
+        };
 
         // --- Стадія 2: крос-оцінка обох розв'язків у двох критеріях ---
         let state_a = State {

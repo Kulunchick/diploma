@@ -522,6 +522,7 @@ async def create_formation(
                     kmax_subproblem=combined.kmax_subproblem,
                     discount_step=combined.discount_step,
                     local_search_restarts=combined.local_search_restarts,
+                    subtask_solver=combined.subtask_solver,
                 ),
                 scenario_id=str(scenario.id),
                 redis_channel=redis_channel,
