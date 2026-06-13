@@ -90,7 +90,7 @@ export default function FormationsPage() {
   const [algorithm, setAlgorithm] = useState<FormationAlgorithm>('probabilistic');
   const [ant, setAnt] = useState({ Kmax: 100, num_ants: 20, alpha: 1, beta: 2, p: 0.1, tau: 1 });
   const [prob, setProb] = useState({ Kmax: 100 });
-  const [combined, setCombined] = useState({ kmax_subproblem: 100, discount_step: 0.05, ignore_discounts: false, local_search_restarts: 0 });
+  const [combined, setCombined] = useState({ kmax_subproblem: 300, discount_step: 0.05, ignore_discounts: false, local_search_restarts: 6 });
 
   // All param values must be within bounds before the form can be submitted.
   const paramsValid = useMemo(() => {
