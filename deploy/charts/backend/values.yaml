@@ -30,6 +30,11 @@ resources:
     cpu: "500m"
     memory: "512Mi"
 
+# Pod scheduling — set per-env in values-{local,production}/backend.yaml.
+nodeSelector: {}
+affinity: {}
+tolerations: []
+
 imagePullSecrets: []
 # imagePullSecrets:
 #   - name: ghcr-pull-secret

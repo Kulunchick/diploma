@@ -34,6 +34,11 @@ ingress:
     serviceName: "backend-backend"
     servicePort: 8000
 
+# Pod scheduling — set per-env in values-{local,production}/frontend.yaml.
+nodeSelector: {}
+affinity: {}
+tolerations: []
+
 # Set to existing secret name if ghcr packages are private
 imagePullSecrets: []
 # imagePullSecrets:

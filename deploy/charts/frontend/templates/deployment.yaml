@@ -18,6 +18,18 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       initContainers:
         - name: init-config
           image: "{{ .Values.image.repository }}:{{ required "image.tag must be set in values-local/frontend.yaml or values-production/frontend.yaml" .Values.image.tag }}"
