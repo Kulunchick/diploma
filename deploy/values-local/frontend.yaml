@@ -1,5 +1,5 @@
 image:
-  tag: "826257a9"
+  tag: "48dd7e0a"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
