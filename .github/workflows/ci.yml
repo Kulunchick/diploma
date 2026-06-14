@@ -191,27 +191,24 @@ jobs:
         needs.changes.outputs.backend  == 'true' ||
         needs.changes.outputs.worker   == 'true'
       )
-    runs-on: ubuntu-latest
+    # One build per (component × arch) on a native runner, so PRs catch arm64
+    # (Graviton) build breakage too. Shares the per-component-arch GHA cache
+    # scope with cd.yml, so a green PR warms the cache the deploy reuses.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - component: frontend
-            changed:    ${{ needs.changes.outputs.frontend }}
-            dockerfile: apps/ui/Dockerfile
-            context:    apps/ui
-          - component: backend
-            changed:    ${{ needs.changes.outputs.backend }}
-            dockerfile: apps/api/Dockerfile
-            context:    .
-          - component: worker
-            changed:    ${{ needs.changes.outputs.worker }}
-            dockerfile: apps/worker/Dockerfile
-            context:    .
+          - { component: frontend, changed: "${{ needs.changes.outputs.frontend }}", dockerfile: apps/ui/Dockerfile,     context: apps/ui, arch: amd64, runner: ubuntu-latest }
+          - { component: frontend, changed: "${{ needs.changes.outputs.frontend }}", dockerfile: apps/ui/Dockerfile,     context: apps/ui, arch: arm64, runner: ubuntu-24.04-arm }
+          - { component: backend,  changed: "${{ needs.changes.outputs.backend }}",  dockerfile: apps/api/Dockerfile,    context: .,       arch: amd64, runner: ubuntu-latest }
+          - { component: backend,  changed: "${{ needs.changes.outputs.backend }}",  dockerfile: apps/api/Dockerfile,    context: .,       arch: arm64, runner: ubuntu-24.04-arm }
+          - { component: worker,   changed: "${{ needs.changes.outputs.worker }}",   dockerfile: apps/worker/Dockerfile, context: .,       arch: amd64, runner: ubuntu-latest }
+          - { component: worker,   changed: "${{ needs.changes.outputs.worker }}",   dockerfile: apps/worker/Dockerfile, context: .,       arch: arm64, runner: ubuntu-24.04-arm }
     steps:
       - name: Skip if unchanged
         if: matrix.changed != 'true'
-        run: echo "Component ${{ matrix.component }} unchanged — skipping."
+        run: echo "Component ${{ matrix.component }} (${{ matrix.arch }}) unchanged — skipping."
 
       - uses: actions/checkout@v4
         if: matrix.changed == 'true'
@@ -227,7 +224,7 @@ jobs:
           context:    ${{ matrix.context }}
           file:       ${{ matrix.dockerfile }}
           push:       false
-          platforms:  linux/amd64
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to:   type=gha,scope=${{ matrix.component }},mode=max
-          tags:       diploma-${{ matrix.component }}:ci-check
+          platforms:  linux/${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.component }}-${{ matrix.arch }}
+          cache-to:   type=gha,scope=${{ matrix.component }}-${{ matrix.arch }},mode=max
+          tags:       diploma-${{ matrix.component }}:ci-check-${{ matrix.arch }}

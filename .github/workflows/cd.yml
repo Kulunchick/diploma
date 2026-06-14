@@ -152,34 +152,39 @@ jobs:
         working-directory: apps/worker
 
   # ──────────────────────────────────────────────────────────────────────────
-  # 3. Build + push to ghcr.io (only if ALL tests above passed)
-  #    Tag: immutable 8-char git SHA.  latest is never used.
+  # 3. Build + push to ghcr.io, ONE per (component × arch).
+  #    Multi-arch (amd64 + arm64/Graviton) so pods can run on AWS Graviton
+  #    (t4g/c7g/m7g) spot nodes. Built NATIVELY per arch — amd64 on
+  #    ubuntu-latest, arm64 on ubuntu-24.04-arm — because backend & worker
+  #    compile Rust (maturin), which is unusably slow under QEMU emulation.
+  #    Each arch is pushed BY DIGEST (no tag); the `merge` job below stitches
+  #    the per-arch digests into a single multi-arch tag (8-char git SHA).
+  #
+  #    NOTE: arm64 uses GitHub's hosted `ubuntu-24.04-arm` runner — free for
+  #    public repos, billed on Team/Enterprise for private. If unavailable,
+  #    swap the arm64 runner to `ubuntu-latest` and add docker/setup-qemu-action
+  #    (slower). NodePool must also allow arch=arm64 + Graviton families in the
+  #    CloudFleet Fleet config for these images to actually be scheduled there.
   # ──────────────────────────────────────────────────────────────────────────
   build-push:
-    name: Build & Push / ${{ matrix.component }}
+    name: Build & Push / ${{ matrix.component }} (${{ matrix.arch }})
     needs: [changes, test]
     # Re-check change flags; if test was skipped (nothing changed) this is also false.
     if: |
       needs.changes.outputs.frontend == 'true' ||
       needs.changes.outputs.backend  == 'true' ||
       needs.changes.outputs.worker   == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - component: frontend
-            changed:    ${{ needs.changes.outputs.frontend }}
-            dockerfile: apps/ui/Dockerfile
-            context:    apps/ui
-          - component: backend
-            changed:    ${{ needs.changes.outputs.backend }}
-            dockerfile: apps/api/Dockerfile
-            context:    .
-          - component: worker
-            changed:    ${{ needs.changes.outputs.worker }}
-            dockerfile: apps/worker/Dockerfile
-            context:    .
+          - { component: frontend, changed: "${{ needs.changes.outputs.frontend }}", dockerfile: apps/ui/Dockerfile,     context: apps/ui, arch: amd64, runner: ubuntu-latest }
+          - { component: frontend, changed: "${{ needs.changes.outputs.frontend }}", dockerfile: apps/ui/Dockerfile,     context: apps/ui, arch: arm64, runner: ubuntu-24.04-arm }
+          - { component: backend,  changed: "${{ needs.changes.outputs.backend }}",  dockerfile: apps/api/Dockerfile,    context: .,       arch: amd64, runner: ubuntu-latest }
+          - { component: backend,  changed: "${{ needs.changes.outputs.backend }}",  dockerfile: apps/api/Dockerfile,    context: .,       arch: arm64, runner: ubuntu-24.04-arm }
+          - { component: worker,   changed: "${{ needs.changes.outputs.worker }}",   dockerfile: apps/worker/Dockerfile, context: .,       arch: amd64, runner: ubuntu-latest }
+          - { component: worker,   changed: "${{ needs.changes.outputs.worker }}",   dockerfile: apps/worker/Dockerfile, context: .,       arch: arm64, runner: ubuntu-24.04-arm }
     steps:
       - name: Skip if unchanged
         if: matrix.changed != 'true'
@@ -200,42 +205,119 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute image name
+        if: matrix.changed == 'true'
+        id: img
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "name=ghcr.io/${OWNER}/diploma-${{ matrix.component }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push by digest
+        if: matrix.changed == 'true'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context:   ${{ matrix.context }}
+          file:      ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          # Push WITHOUT a tag — the merge job assembles the multi-arch tag from
+          # the per-arch digests. name-canonical keeps the canonical image name.
+          outputs: type=image,name=${{ steps.img.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          # GHA layer cache — scoped per component AND arch so the six builds
+          # don't evict each other.  Rust layers (~200 MB) are cached here.
+          cache-from: type=gha,scope=${{ matrix.component }}-${{ matrix.arch }}
+          cache-to:   type=gha,scope=${{ matrix.component }}-${{ matrix.arch }},mode=max
+
+      - name: Export digest
+        if: matrix.changed == 'true'
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: matrix.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.component }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 3b. Merge per-arch digests into a single multi-arch manifest, tagged with
+  #     the immutable 8-char git SHA. One job per changed component.
+  # ──────────────────────────────────────────────────────────────────────────
+  merge:
+    name: Merge manifest / ${{ matrix.component }}
+    needs: [changes, build-push]
+    if: |
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.backend  == 'true' ||
+      needs.changes.outputs.worker   == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            changed: ${{ needs.changes.outputs.frontend }}
+          - component: backend
+            changed: ${{ needs.changes.outputs.backend }}
+          - component: worker
+            changed: ${{ needs.changes.outputs.worker }}
+    steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Component ${{ matrix.component }} unchanged — skipping."
+
+      - name: Download digests
+        if: matrix.changed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.component }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        if: matrix.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        if: matrix.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Compute image name and tag
         if: matrix.changed == 'true'
         id: img
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          IMAGE="ghcr.io/${OWNER}/diploma-${{ matrix.component }}"
-          TAG="${GITHUB_SHA::8}"
-          echo "name=${IMAGE}"         >> $GITHUB_OUTPUT
-          echo "tag=${TAG}"            >> $GITHUB_OUTPUT
-          echo "full=${IMAGE}:${TAG}"  >> $GITHUB_OUTPUT
+          echo "name=ghcr.io/${OWNER}/diploma-${{ matrix.component }}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      - name: Build and push
+      - name: Create multi-arch manifest
         if: matrix.changed == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context:   ${{ matrix.context }}
-          file:      ${{ matrix.dockerfile }}
-          push:      true
-          platforms: linux/amd64
-          tags:      ${{ steps.img.outputs.full }}
-          # GHA layer cache — scoped per component so frontend/backend/worker
-          # don't evict each other.  Rust layers (~200 MB) are cached here.
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to:   type=gha,scope=${{ matrix.component }},mode=max
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }} \
+            $(printf '${{ steps.img.outputs.name }}@sha256:%s ' *)
 
-      - name: Job summary
+      - name: Inspect + job summary
         if: matrix.changed == 'true'
         run: |
-          echo "### ✅ Image pushed" >> $GITHUB_STEP_SUMMARY
+          docker buildx imagetools inspect ${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }}
+          echo "### ✅ Multi-arch image pushed (amd64 + arm64)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Component | \`${{ matrix.component }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ steps.img.outputs.full }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ steps.img.outputs.name }}:${{ steps.img.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | ${{ github.event.head_commit.message }} |" >> $GITHUB_STEP_SUMMARY
 
   # ──────────────────────────────────────────────────────────────────────────
   # 4. Write-back: update image.tag in Helm values.yaml for changed charts,
@@ -255,7 +337,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   writeback:
     name: Write-back image tags
-    needs: [changes, build-push]
+    needs: [changes, merge]
     if: |
       needs.changes.outputs.frontend == 'true' ||
       needs.changes.outputs.backend  == 'true' ||
