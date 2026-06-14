@@ -1,3 +1,4 @@
+# Built multi-arch (linux/amd64 + linux/arm64 / Graviton) by cd.yml.
 # ============================================================
 # Stage 1: Build Rust extension (assignment_solver)
 # Needed because PyPI 0.5.0 lacks set_iteration_callback.

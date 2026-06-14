@@ -1,3 +1,4 @@
+# Built multi-arch (linux/amd64 + linux/arm64 / Graviton) by cd.yml.
 # ============================================================
 # Stage 1: Build static assets
 # No build-time URL args — all config is injected at runtime
