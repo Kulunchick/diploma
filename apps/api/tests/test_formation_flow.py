@@ -340,3 +340,61 @@ async def test_scenario_completes_when_redis_unavailable(client, auth_headers, m
     assert detail["status"] == "completed"  # result still recorded
     its = (await client.get(f"/api/formations/{sid}/iterations", headers=h)).json()
     assert its == []  # history degraded, but scenario intact
+
+
+async def test_reconcile_does_not_clobber_terminal_status(client, auth_headers, mock_temporal):
+    """Regression: a fast workflow can write status='completed' between
+    _reconcile_status's describe() and its write. The pending->running promotion
+    must not revert that terminal state (observed in prod: a combined run stuck at
+    'running' with value/finished_at already populated). mock_temporal always
+    reports RUNNING, so the race is reproduced deterministically with two sessions.
+    """
+    import uuid as _uuid
+
+    from sqlalchemy import select, update
+
+    from src.operations.db.base import AsyncSessionLocal
+    from src.operations.db.models import FormationScenario
+    from src.operations.routers.formations import _reconcile_status
+
+    h = await auth_headers("race@example.com")
+    await _seed(client, h)
+    created = await client.post(
+        "/api/formations",
+        json={
+            "name": "Race",
+            "b_total": 5000,
+            "algorithm": "ant_colony",
+            "params": {"Kmax": 10, "num_ants": 5, "alpha": 1, "beta": 2, "p": 0.1, "tau": 1},
+        },
+        headers=h,
+    )
+    assert created.status_code == 201
+    sid = _uuid.UUID(created.json()["id"])
+
+    async with AsyncSessionLocal() as sa:
+        # session A holds the scenario while it is still pending — exactly the
+        # stale view reconcile loads before it queries Temporal.
+        scenario = (
+            await sa.execute(select(FormationScenario).where(FormationScenario.id == sid))
+        ).scalar_one()
+        assert scenario.status == "pending"
+
+        # the worker's persist activity commits the terminal state concurrently.
+        async with AsyncSessionLocal() as sb:
+            await sb.execute(
+                update(FormationScenario)
+                .where(FormationScenario.id == sid)
+                .values(status="completed", value=690.0)
+            )
+            await sb.commit()
+
+        # reconcile runs with the stale 'pending' object and describe()==RUNNING;
+        # the guarded UPDATE must no-op because the row is no longer pending.
+        await _reconcile_status(scenario, mock_temporal, sa)
+
+    async with AsyncSessionLocal() as sc:
+        final = (
+            await sc.execute(select(FormationScenario).where(FormationScenario.id == sid))
+        ).scalar_one()
+    assert final.status == "completed"  # pre-fix: clobbered back to 'running'

@@ -23,7 +23,7 @@ from fastapi import (
     status,
 )
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from temporalio.client import Client, WorkflowExecutionStatus
@@ -230,15 +230,44 @@ async def _reconcile_status(
     except RPCError:
         return
     st = desc.status
+    # Both branches guard on the CURRENT db status (WHERE status IN ...) instead of
+    # writing through the ORM's possibly-stale in-memory copy. A fast workflow can
+    # finish — and persist_*_result_activity can commit status='completed' — in the
+    # window between describe() above and our write here; a blind ORM commit would
+    # then clobber that terminal state back to running/failed (observed: a combined
+    # run stuck at 'running' with value/finished_at already populated). The
+    # conditional UPDATE is a no-op once the row is terminal, so persist always wins.
     if st in _TERMINAL_FAILED:
-        scenario.status = "failed"
-        scenario.finished_at = datetime.now(timezone.utc)
-        if not scenario.error:
-            scenario.error = f"Workflow ended with status {st.name}"
-        await session.commit()
+        result = await session.execute(
+            update(FormationScenario)
+            .where(
+                FormationScenario.id == scenario.id,
+                FormationScenario.status.in_(("pending", "running")),
+            )
+            .values(
+                status="failed",
+                finished_at=datetime.now(timezone.utc),
+                error=scenario.error or f"Workflow ended with status {st.name}",
+            )
+        )
+        if result.rowcount:
+            await session.commit()
+        # Refresh either way: rowcount==0 means persist wrote a terminal state
+        # concurrently — re-read so the response reflects the true status, not our
+        # stale in-memory copy.
+        await session.refresh(scenario)
     elif st == WorkflowExecutionStatus.RUNNING and scenario.status == "pending":
-        scenario.status = "running"
-        await session.commit()
+        result = await session.execute(
+            update(FormationScenario)
+            .where(
+                FormationScenario.id == scenario.id,
+                FormationScenario.status == "pending",
+            )
+            .values(status="running")
+        )
+        if result.rowcount:
+            await session.commit()
+        await session.refresh(scenario)
 
 
 async def _get_owned(
