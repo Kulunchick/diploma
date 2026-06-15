@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { ALGO_LABEL } from '@shared/lib/algorithmParams';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -38,7 +39,7 @@ export default function FormationDetailPage() {
       if (kind === 'json') await exportJson();
       else await exportCsv();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Помилка експорту');
+      toast.error(getErrorMessage(e, 'Помилка експорту'));
     }
   };
 

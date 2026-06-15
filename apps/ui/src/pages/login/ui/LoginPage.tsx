@@ -4,9 +4,11 @@ import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Input } from '@shared/ui/input';
+import { PasswordInput } from '@shared/ui/password-input';
 import { Label } from '@shared/ui/label';
 import { loginUser } from '@features/auth-login';
 
@@ -28,7 +30,7 @@ export default function LoginPage() {
       await loginUser(values.email, values.password, from);
       toast.success('Вхід виконано');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Не вдалося увійти');
+      toast.error(getErrorMessage(err, 'Не вдалося увійти'));
     }
   };
 
@@ -45,7 +47,7 @@ export default function LoginPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="password">Пароль</Label>
-              <Input id="password" type="password" autoComplete="current-password" {...register('password')} />
+              <PasswordInput id="password" autoComplete="current-password" {...register('password')} />
               {errors.password && <span className="text-sm text-destructive">{errors.password.message}</span>}
             </div>
             <Button type="submit" disabled={isSubmitting}>

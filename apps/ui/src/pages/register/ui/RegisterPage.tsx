@@ -4,9 +4,11 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Input } from '@shared/ui/input';
+import { PasswordInput } from '@shared/ui/password-input';
 import { Label } from '@shared/ui/label';
 import { registerUser } from '@features/auth-register';
 
@@ -26,7 +28,7 @@ export default function RegisterPage() {
       await registerUser(values.email, values.password, values.full_name || undefined);
       toast.success('Акаунт створено');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Не вдалося зареєструватися');
+      toast.error(getErrorMessage(err, 'Не вдалося зареєструватися'));
     }
   };
 
@@ -47,7 +49,7 @@ export default function RegisterPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="password">Пароль</Label>
-              <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
+              <PasswordInput id="password" autoComplete="new-password" {...register('password')} />
               {errors.password && <span className="text-sm text-destructive">{errors.password.message}</span>}
             </div>
             <Button type="submit" disabled={isSubmitting}>

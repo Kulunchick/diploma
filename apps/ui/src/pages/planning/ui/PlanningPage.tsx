@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { keys } from '@shared/lib/react-query/keys';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
@@ -61,7 +62,7 @@ export default function PlanningPage() {
     const timer = setTimeout(() => {
       void planningApi.upsertCell({ service_id: serviceId, provider_id: providerId, ...merged })
         .then(() => setState(key, 'saved'))
-        .catch((e) => { setState(key, 'error'); toast.error(e instanceof Error ? e.message : 'Помилка збереження клітинки'); });
+        .catch((e) => { setState(key, 'error'); toast.error(getErrorMessage(e, 'Помилка збереження клітинки')); });
     }, DEBOUNCE_MS);
     timers.current.set(key, timer);
   };

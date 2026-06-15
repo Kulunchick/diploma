@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { keys } from '@shared/lib/react-query/keys';
 import { cn } from '@shared/lib/utils';
 import { Badge } from '@shared/ui/badge';
@@ -52,7 +53,7 @@ export default function ServiceGroupsPage() {
       setOpen(false); setEditing(null); invalidate();
       qc.invalidateQueries({ queryKey: keys.services.all() });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Помилка збереження'),
+    onError: (e) => toast.error(getErrorMessage(e, 'Помилка збереження')),
   });
 
   const deleteMutation = useMutation({
@@ -61,7 +62,7 @@ export default function ServiceGroupsPage() {
       toast.success('Групу видалено'); invalidate();
       qc.invalidateQueries({ queryKey: keys.services.all() });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Помилка видалення'),
+    onError: (e) => toast.error(getErrorMessage(e, 'Помилка видалення')),
   });
 
   const toggle = (id: string) => setMemberIds((prev) => {

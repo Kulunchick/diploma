@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { keys } from '@shared/lib/react-query/keys';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
@@ -48,13 +49,13 @@ export default function ProvidersPage() {
       toast.success(editing ? 'Провайдера оновлено' : 'Провайдера додано');
       setOpen(false); setEditing(null); invalidate();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Помилка збереження'),
+    onError: (e) => toast.error(getErrorMessage(e, 'Помилка збереження')),
   });
 
   const deleteMutation = useMutation({
     mutationFn: providerApi.deleteProvider,
     onSuccess: () => { toast.success('Провайдера видалено'); invalidate(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Помилка видалення'),
+    onError: (e) => toast.error(getErrorMessage(e, 'Помилка видалення')),
   });
 
   return (

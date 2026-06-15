@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { getErrorMessage } from '@shared/api/error-message';
 import { keys } from '@shared/lib/react-query/keys';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -53,7 +54,7 @@ export default function ServicesPage() {
       toast.success(editing ? 'Сервіс оновлено' : 'Сервіс додано');
       setOpen(false); setEditing(null); invalidate();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Помилка збереження'),
+    onError: (e) => toast.error(getErrorMessage(e, 'Помилка збереження')),
   });
 
   const deleteMutation = useMutation({
@@ -63,7 +64,7 @@ export default function ServicesPage() {
       invalidate();
       qc.invalidateQueries({ queryKey: keys.serviceGroups.all() });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Помилка видалення'),
+    onError: (e) => toast.error(getErrorMessage(e, 'Помилка видалення')),
   });
 
   return (
